@@ -8,6 +8,8 @@
 ![TypeScript](https://img.shields.io/badge/TypeScript-5.8-blue)
 ![React](https://img.shields.io/badge/React-19-61dafb)
 ![Rust](https://img.shields.io/badge/Rust-2021-orange)
+![Stars](https://img.shields.io/github/stars/heroof123/CorexA-?style=social)
+![Forks](https://img.shields.io/github/forks/heroof123/CorexA-?style=social)
 
 > A lightweight, privacy-focused IDE with local AI capabilities. No cloud required, your code stays on your machine.
 
