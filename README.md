@@ -390,7 +390,33 @@ It helps the project grow and motivates us to keep improving it.
 
 ## 📸 Screenshots
 
-> Add screenshots here to showcase your IDE
+### 📷 How to Add Screenshots
+
+**Method 1: Using GitHub Issues (Easiest)**
+1. Go to [Issues](https://github.com/heroof123/CorexAI/issues/new)
+2. Drag & drop your images
+3. GitHub generates URLs automatically
+4. Copy the URLs and paste them here
+5. Close the issue without posting
+
+**Method 2: Upload to Repository**
+1. Save screenshots in `screenshots/` folder
+2. Commit and push
+3. Reference them: `![Description](screenshots/filename.png)`
+
+### 🎬 Demo Video
+
+**To add a video:**
+- Upload to YouTube and embed: `[![Video](thumbnail.jpg)](https://youtube.com/watch?v=...)`
+- Or upload .mp4 directly to GitHub (max 10MB)
+
+**Example:**
+```markdown
+![Main Interface](screenshots/main-interface.png)
+![AI Chat](screenshots/ai-chat.png)
+```
+
+> **Note:** Screenshots will make your project much more attractive to potential users!
 
 ## 🔒 Security
 
