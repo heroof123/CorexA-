@@ -249,7 +249,9 @@ pub async fn chat_with_specific_ai(message: String, model_type: String) -> Resul
 #[derive(serde::Deserialize)]
 pub struct ProviderConfig {
     pub base_url: String,
+    #[allow(dead_code)]
     pub host: Option<String>,
+    #[allow(dead_code)]
     pub port: Option<u16>,
     pub api_key: Option<String>,
     pub model_name: String,
@@ -971,3 +973,286 @@ pub async fn download_gguf_model(
     info!("✅ İndirme tamamlandı: {}", destination);
     Ok(destination)
 }
+
+
+// --------------------
+// VECTOR DATABASE COMMANDS (AI-Native IDE Evolution)
+// --------------------
+
+use crate::vector_db::{VectorDB, CodeChunk};
+use std::sync::Arc;
+use tokio::sync::Mutex;
+
+// Global VectorDB instance
+lazy_static::lazy_static! {
+    static ref VECTOR_DB: Arc<Mutex<Option<VectorDB>>> = Arc::new(Mutex::new(None));
+}
+
+/// Initialize vector database
+#[tauri::command]
+pub async fn init_vector_db(db_path: String) -> Result<(), String> {
+    info!("🔵 Vector DB başlatılıyor: {}", db_path);
+    
+    let db = VectorDB::init(&db_path)
+        .await
+        .map_err(|e| format!("Vector DB başlatılamadı: {}", e))?;
+    
+    let mut global_db: tokio::sync::MutexGuard<Option<VectorDB>> = VECTOR_DB.lock().await;
+    *global_db = Some(db);
+    
+    info!("✅ Vector DB başlatıldı");
+    Ok(())
+}
+
+/// Search vector database for similar code chunks
+#[tauri::command]
+pub async fn vector_search(query: String, top_k: u32) -> Result<Vec<CodeChunk>, String> {
+    info!("🔍 Vector search: {} (top_k: {})", query, top_k);
+    
+    // Create embedding for query
+    let query_embedding = create_embedding_bge(query).await?;
+    
+    // Get VectorDB instance
+    let global_db: tokio::sync::MutexGuard<Option<VectorDB>> = VECTOR_DB.lock().await;
+    let db = global_db.as_ref()
+        .ok_or("Vector DB başlatılmamış. Önce init_vector_db çağırın.")?;
+    
+    // Search
+    let results = db.query(query_embedding, top_k as usize)
+        .await
+        .map_err(|e| format!("Vector search hatası: {}", e))?;
+    
+    info!("✅ {} sonuç bulundu", results.len());
+    Ok(results)
+}
+
+/// Index a file in the vector database
+#[tauri::command]
+pub async fn index_file_vector(file_path: String) -> Result<(), String> {
+    info!("📇 Dosya indeksleniyor: {}", file_path);
+    
+    // Read file content
+    let content = read_file(file_path.clone())?;
+    
+    // TODO: Parse file with tree-sitter to extract symbols
+    // For now, create a single chunk for the entire file
+    
+    // Create embedding
+    let embedding = create_embedding_bge(content.clone()).await?;
+    
+    // Create chunk
+    let chunk = CodeChunk {
+        id: format!("{}:0:0", file_path),
+        file_path: file_path.clone(),
+        content,
+        embedding,
+        symbol_name: None,
+        chunk_type: "File".to_string(),
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    };
+    
+    // Get VectorDB instance
+    let global_db: tokio::sync::MutexGuard<Option<VectorDB>> = VECTOR_DB.lock().await;
+    let db = global_db.as_ref()
+        .ok_or("Vector DB başlatılmamış. Önce init_vector_db çağırın.")?;
+    
+    // Upsert to vector DB
+    db.upsert(vec![chunk])
+        .await
+        .map_err(|e| format!("Vector DB upsert hatası: {}", e))?;
+    
+    info!("✅ Dosya indekslendi: {}", file_path);
+    Ok(())
+}
+
+/// Delete file index from vector database
+#[tauri::command]
+pub async fn delete_file_index(file_path: String) -> Result<(), String> {
+    info!("🗑️ Dosya indeksi siliniyor: {}", file_path);
+    
+    // Get VectorDB instance
+    let global_db: tokio::sync::MutexGuard<Option<VectorDB>> = VECTOR_DB.lock().await;
+    let db = global_db.as_ref()
+        .ok_or("Vector DB başlatılmamış. Önce init_vector_db çağırın.")?;
+    
+    // Delete file
+    db.delete_file(&file_path)
+        .await
+        .map_err(|e| format!("Vector DB delete hatası: {}", e))?;
+    
+    info!("✅ Dosya indeksi silindi: {}", file_path);
+    Ok(())
+}
+
+
+// --------------------
+// RAG PIPELINE COMMANDS (AI-Native IDE Evolution)
+// --------------------
+
+use crate::rag_pipeline::{RAGPipeline, QueryIntent, ContextSource};
+
+/// Analyze query intent
+#[tauri::command]
+pub async fn analyze_query_intent(query: String) -> Result<QueryIntent, String> {
+    info!("🔍 Query intent analizi: {}", query);
+    
+    let pipeline = RAGPipeline::new(170_000); // Claude 3.5 context limit
+    let intent = pipeline.analyze_intent(&query);
+    
+    info!("✅ Intent: {:?}", intent);
+    Ok(intent)
+}
+
+/// Build context from multiple sources
+#[tauri::command]
+pub async fn build_rag_context(
+    query: String,
+    max_tokens: Option<usize>,
+) -> Result<serde_json::Value, String> {
+    info!("🔨 RAG context oluşturuluyor: {}", query);
+    
+    let pipeline = RAGPipeline::new(max_tokens.unwrap_or(170_000));
+    
+    // Analyze intent
+    let intent = pipeline.analyze_intent(&query);
+    
+    // Build context
+    let result: Result<(String, Vec<ContextSource>), Box<dyn std::error::Error>> = pipeline.build_context(intent.clone(), &query).await;
+    let (context, sources) = result.map_err(|e| format!("Context build hatası: {}", e))?;
+    
+    info!("✅ Context oluşturuldu: {} tokens", RAGPipeline::estimate_tokens(&context));
+    
+    Ok(json!({
+        "context": context,
+        "sources": sources,
+        "intent": intent,
+        "token_count": RAGPipeline::estimate_tokens(&context)
+    }))
+}
+
+// --------------------
+// TREE-SITTER PARSER COMMANDS (AI-Native IDE Evolution)
+// --------------------
+
+use crate::tree_sitter_parser::{TreeSitterParser, FileAnalysis};
+use tokio::sync::Mutex as TokioMutex;
+use once_cell::sync::Lazy;
+
+// Global TreeSitterParser instance
+static TREE_SITTER_PARSER: Lazy<TokioMutex<TreeSitterParser>> = Lazy::new(|| {
+    TokioMutex::new(TreeSitterParser::new())
+});
+
+/// Parse file and extract symbols using tree-sitter
+#[tauri::command]
+pub async fn parse_file_ast(file_path: String) -> Result<FileAnalysis, String> {
+    info!("🌳 Dosya parse ediliyor: {}", file_path);
+    
+    // Read file content
+    let content = fs::read_to_string(&file_path)
+        .map_err(|e| format!("Dosya okunamadı: {}", e))?;
+    
+    // Get parser instance
+    let mut parser: tokio::sync::MutexGuard<TreeSitterParser> = TREE_SITTER_PARSER.lock().await;
+    
+    // Parse file
+    let analysis = parser.parse_file(&file_path, &content)
+        .map_err(|e| format!("Parse hatası: {}", e))?;
+    
+    info!("✅ Parse tamamlandı: {} sembol bulundu", analysis.symbols.len());
+    Ok(analysis)
+}
+
+/// Clear tree-sitter AST cache
+#[tauri::command]
+pub async fn clear_ast_cache() -> Result<(), String> {
+    info!("🧹 AST cache temizleniyor");
+    
+    let mut parser: tokio::sync::MutexGuard<TreeSitterParser> = TREE_SITTER_PARSER.lock().await;
+    parser.clear_cache();
+    
+    info!("✅ AST cache temizlendi");
+    Ok(())
+}
+
+/// Invalidate cache for specific file
+#[tauri::command]
+pub async fn invalidate_file_cache(file_path: String) -> Result<(), String> {
+    info!("🗑️ Dosya cache'i geçersiz kılınıyor: {}", file_path);
+    
+    let mut parser: tokio::sync::MutexGuard<TreeSitterParser> = TREE_SITTER_PARSER.lock().await;
+    parser.invalidate_file(&file_path);
+    
+    info!("✅ Dosya cache'i geçersiz kılındı");
+    Ok(())
+}
+
+
+// --------------------
+// 🆕 TASK 10: GIT TIMELINE INTELLIGENCE
+// --------------------
+
+/// 🆕 TASK 10.1: Get git log for a specific file
+#[tauri::command]
+pub async fn git_log_file(path: String, limit: Option<u32>) -> Result<String, String> {
+    info!("📜 Git log for file: {}", path);
+    
+    let limit_arg = limit.unwrap_or(10).to_string();
+    
+    let output = Command::new("git")
+        .args(&["log", &format!("-{}", limit_arg), "--", &path])
+        .output()
+        .map_err(|e| format!("Failed to execute git log: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Graceful degradation - return empty string instead of error
+        if stderr.contains("not a git repository") {
+            info!("⚠️ Not a git repository, returning empty log");
+            return Ok(String::new());
+        }
+        return Err(format!("Git log failed: {}", stderr));
+    }
+    
+    let log_output = String::from_utf8_lossy(&output.stdout).to_string();
+    info!("✅ Git log retrieved: {} bytes", log_output.len());
+    
+    Ok(log_output)
+}
+
+/// 🆕 TASK 10.2: Get git blame for a file (line range)
+#[tauri::command]
+pub async fn git_blame(
+    path: String, 
+    start_line: u32, 
+    end_line: u32
+) -> Result<String, String> {
+    info!("🔍 Git blame for {}:{}-{}", path, start_line, end_line);
+    
+    let line_range = format!("{},{}", start_line, end_line);
+    
+    let output = Command::new("git")
+        .args(&["blame", "-L", &line_range, &path])
+        .output()
+        .map_err(|e| format!("Failed to execute git blame: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        // Graceful degradation
+        if stderr.contains("not a git repository") {
+            info!("⚠️ Not a git repository, returning empty blame");
+            return Ok(String::new());
+        }
+        return Err(format!("Git blame failed: {}", stderr));
+    }
+    
+    let blame_output = String::from_utf8_lossy(&output.stdout).to_string();
+    info!("✅ Git blame retrieved: {} bytes", blame_output.len());
+    
+    Ok(blame_output)
+}
+
+

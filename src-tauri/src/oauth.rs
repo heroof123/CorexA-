@@ -5,13 +5,13 @@ use std::collections::HashMap;
 
 #[derive(Clone)]
 pub struct OAuthState {
-    pending_requests: Arc<Mutex<HashMap<String, String>>>,
+    _pending_requests: Arc<Mutex<HashMap<String, String>>>,
 }
 
 impl OAuthState {
     pub fn new() -> Self {
         Self {
-            pending_requests: Arc::new(Mutex::new(HashMap::new())),
+            _pending_requests: Arc::new(Mutex::new(HashMap::new())),
         }
     }
 }

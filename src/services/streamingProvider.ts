@@ -10,32 +10,29 @@ export interface StreamingConfig {
 // Simulated streaming (chunk-based)
 // Gerçek streaming için Rust backend'de event emit gerekli
 export async function chatWithStreaming(
+  modelPath: string, // 🆕 Model path required
   prompt: string,
   maxTokens: number,
   temperature: number,
   config: StreamingConfig
 ): Promise<string> {
   try {
-    // Şimdilik: Tüm cevabı al, sonra chunk'lara böl
     const fullResponse = await invoke<string>('chat_with_gguf_model', {
+      modelPath,
       prompt,
       maxTokens,
       temperature
     });
 
-    // Simulate streaming by splitting into words
+    // 🔥 FIX: Her token'da sadece DELTA (yeni kısım) gönder, birikimli değil
     if (config.onToken) {
       const words = fullResponse.split(' ');
-      let accumulated = '';
-      
+
       for (let i = 0; i < words.length; i++) {
-        const word = words[i];
-        accumulated += (i > 0 ? ' ' : '') + word;
-        
-        // Emit token
-        config.onToken(accumulated);
-        
-        // Small delay to simulate streaming
+        // Sadece yeni kelimeyi gönder (delta)
+        const delta = (i > 0 ? ' ' : '') + words[i];
+        config.onToken(delta);
+
         await new Promise(resolve => setTimeout(resolve, 30));
       }
     }
@@ -56,6 +53,7 @@ export async function chatWithStreaming(
 
 // Chunk-based streaming (better simulation)
 export async function chatWithChunkedStreaming(
+  modelPath: string, // 🆕 Model path required
   prompt: string,
   maxTokens: number,
   temperature: number,
@@ -63,26 +61,22 @@ export async function chatWithChunkedStreaming(
 ): Promise<string> {
   try {
     const fullResponse = await invoke<string>('chat_with_gguf_model', {
+      modelPath,
       prompt,
       maxTokens,
       temperature
     });
 
-    // Split into chunks for smoother streaming (not character by character)
+    // 🔥 FIX: Birikimli累 metin yerine sadece DELTA chunk gönder
     if (config.onToken) {
-      let accumulated = '';
       const chars = fullResponse.split('');
-      
-      // 🔥 FIXED: Chunk size artırıldı (5 karakter), delay azaltıldı (2ms)
-      // Bu sayede daha az güncelleme, daha az jitter
       const chunkSize = 5; // 5 karakter birden
-      
+
       for (let i = 0; i < chars.length; i += chunkSize) {
-        const chunk = chars.slice(i, i + chunkSize).join('');
-        accumulated += chunk;
-        config.onToken(accumulated);
-        
-        // Daha az delay - daha smooth
+        // Sadece bu adımın yeni chunk'ını gönder (delta)
+        const delta = chars.slice(i, i + chunkSize).join('');
+        config.onToken(delta);
+
         await new Promise(resolve => setTimeout(resolve, 2));
       }
     }

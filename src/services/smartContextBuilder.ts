@@ -13,6 +13,8 @@ import {
   type DependencyGraph,
   type Symbol as SemanticSymbol
 } from "./semanticBrain";
+import { symbolResolver } from "./symbolResolver";
+import { gitIntelligence } from "./gitIntelligence";
 
 interface ContextFile {
   path: string;
@@ -58,7 +60,7 @@ export class SmartContextBuilder {
       }
       
       console.log('🔍 Analyzing file:', filePath);
-      const analysis = parseFile(filePath, content);
+      const analysis = await parseFile(filePath, content);
       
       // Cache'e ekle
       this.semanticCache.set(filePath, analysis);
@@ -72,6 +74,7 @@ export class SmartContextBuilder {
   
   /**
    * 🆕 TASK 28: Dependency graph güncelle
+   * 🆕 TASK 5.6: SymbolResolver entegrasyonu
    */
   private async updateDependencyGraph(allFiles: FileIndex[]): Promise<void> {
     const now = Date.now();
@@ -97,12 +100,17 @@ export class SmartContextBuilder {
     if (analyses.length > 0) {
       this.dependencyGraph = buildDependencyGraph(analyses);
       this.lastGraphUpdate = now;
+      
+      // 🆕 TASK 5.6: SymbolResolver index'ini güncelle
+      symbolResolver.buildIndex(this.dependencyGraph);
+      
       console.log('✅ Dependency graph updated:', analyses.length, 'files');
     }
   }
   
   /**
    * 🆕 TASK 28: Symbol-based context search
+   * 🆕 TASK 5.6: SymbolResolver kullanarak geliştirildi
    */
   private findSymbolContext(query: string): ContextFile[] {
     if (!this.dependencyGraph) {
@@ -122,31 +130,36 @@ export class SmartContextBuilder {
     
     // Her symbol için related symbols bul
     symbols.forEach(symbol => {
-      const related = getRelatedSymbols(symbol.name, this.dependencyGraph!);
+      // 🆕 TASK 5.6: SymbolResolver ile definition ve references bul
+      const symbolMetadata = symbolResolver.getSymbolMetadata(symbol.name);
       
       // Symbol'ün bulunduğu dosyayı ekle
       const analysis = this.semanticCache.get(symbol.filePath);
       if (analysis) {
+        // Related symbols'ları SymbolResolver'dan al
+        const related = getRelatedSymbols(symbol.name, this.dependencyGraph!);
         const fileContent = this.buildSymbolContext(analysis, symbol, related);
         
         contextFiles.push({
           path: symbol.filePath,
           content: fileContent,
           score: 0.95,
-          reason: `Symbol: ${symbol.name}`,
+          reason: `Symbol: ${symbol.name} (${symbolMetadata.referenceCount} refs)`,
           symbols: [symbol],
           relevantSymbols: related.map(s => s.name)
         });
       }
       
-      // Related symbols'ların dosyalarını ekle
-      const relatedFiles = new Set(related.map(s => s.filePath));
+      // 🆕 TASK 5.6: SymbolResolver ile references'ları bul
+      const references = symbolResolver.findReferences(symbol.name);
+      const relatedFiles = new Set(references.map(ref => ref.file_path));
+      
       relatedFiles.forEach(filePath => {
         if (filePath !== symbol.filePath) {
           const relatedAnalysis = this.semanticCache.get(filePath);
           if (relatedAnalysis) {
             const relatedSymbols = relatedAnalysis.symbols.filter(s => 
-              related.some(r => r.name === s.name)
+              references.some(r => r.context === s.name)
             );
             
             const fileContent = this.buildSymbolContext(relatedAnalysis, null, relatedSymbols);
@@ -155,7 +168,7 @@ export class SmartContextBuilder {
               path: filePath,
               content: fileContent,
               score: 0.85,
-              reason: `Related to ${symbol.name}`,
+              reason: `References ${symbol.name}`,
               symbols: relatedSymbols,
               relevantSymbols: relatedSymbols.map(s => s.name)
             });
@@ -272,18 +285,50 @@ export class SmartContextBuilder {
       }
     }
 
-    // 2. Semantic search (embedding similarity)
-    const semanticMatches = this.findSemanticMatches(queryEmbedding, allFiles, 5)
-      .filter(f => !addedPaths.has(f.path));
+    // 2. 🆕 TASK 6.1: Hybrid ranking for all files
+    // Build keyword match map first
+    const keywordMatchResults = this.findKeywordMatches(query, allFiles);
+    const keywordMatches = new Map<string, number>();
+    keywordMatchResults.forEach(match => {
+      keywordMatches.set(match.path, match.matchCount);
+    });
 
-    semanticMatches.forEach(file => {
-      contextFiles.push({
-        path: file.path,
-        content: file.content,
-        score: file.score,
-        reason: `Semantic match (${(file.score * 100).toFixed(0)}%)`
-      });
-      addedPaths.add(file.path);
+    // Calculate hybrid scores for all files
+    const hybridScoredFiles = allFiles
+      .filter(f => !addedPaths.has(f.path))
+      .map(file => {
+        const hybridScore = this.calculateHybridScore(file, query, queryEmbedding, keywordMatches);
+        const impactScore = this.calculateImpactScore(file.path);
+        
+        return {
+          path: file.path,
+          content: file.content,
+          score: hybridScore,
+          impactScore,
+          reason: 'Hybrid ranking'
+        };
+      })
+      .sort((a, b) => {
+        // 🆕 TASK 6.5: Use impact score as tie-breaker
+        const scoreDiff = b.score - a.score;
+        if (Math.abs(scoreDiff) < 0.05) {
+          // Scores are very close, use impact score as tie-breaker
+          return b.impactScore - a.impactScore;
+        }
+        return scoreDiff;
+      })
+      .slice(0, 10); // Top 10 by hybrid score
+
+    hybridScoredFiles.forEach(file => {
+      if (!addedPaths.has(file.path)) {
+        contextFiles.push({
+          path: file.path,
+          content: file.content,
+          score: file.score,
+          reason: `Hybrid match (${(file.score * 100).toFixed(0)}%)${file.impactScore > 5 ? ' [High Impact]' : ''}`
+        });
+        addedPaths.add(file.path);
+      }
     });
 
     // 3. Bağımlılık analizi (🆕 TASK 28: Semantic Brain kullan)
@@ -390,57 +435,131 @@ export class SmartContextBuilder {
       });
     }
 
-    // 6. Keyword matching (query'de geçen dosya isimleri)
-    const keywordMatches = this.findKeywordMatches(query, allFiles)
-      .filter(f => !addedPaths.has(f.path))
-      .slice(0, 2);
-
-    keywordMatches.forEach(file => {
-      contextFiles.push({
-        path: file.path,
-        content: file.content,
-        score: 0.85,
-        reason: "Keyword match"
-      });
-      addedPaths.add(file.path);
-    });
-
-    // Score'a göre sırala ve limit uygula
+    // 🆕 TASK 6.7: Dependency ordering - sort by score first, then by dependency depth
     const sorted = contextFiles
-      .sort((a, b) => b.score - a.score)
+      .map(file => ({
+        ...file,
+        dependencyDepth: this.getDependencyDepth(file.path, currentFile)
+      }))
+      .sort((a, b) => {
+        // First sort by score
+        const scoreDiff = b.score - a.score;
+        if (Math.abs(scoreDiff) > 0.1) {
+          return scoreDiff;
+        }
+        
+        // If scores are close, prioritize by dependency depth (lower = closer to current file)
+        return a.dependencyDepth - b.dependencyDepth;
+      })
       .slice(0, maxFiles);
+
+    // 🆕 TASK 19.1: Include git commit context for current file
+    if (currentFile) {
+      await this.addGitContext(contextFiles, currentFile);
+    }
 
     // Token limiti uygula
     return this.applyTokenLimit(sorted, maxTokens);
   }
 
   /**
-   * Semantic similarity ile dosya bul
+   * 🆕 TASK 19.1, 19.3, 19.5: Add git commit context to files
    */
-  private findSemanticMatches(
-    queryEmbedding: number[],
-    files: FileIndex[],
-    topK: number
-  ): Array<{ path: string; content: string; score: number }> {
-    const scores = files.map(file => ({
-      path: file.path,
-      content: file.content,
-      score: cosineSimilarity(queryEmbedding, file.embedding)
-    }));
+  private async addGitContext(contextFiles: ContextFile[], currentFile: string): Promise<void> {
+    try {
+      // 🆕 TASK 19.1: Load recent commits (3 most recent)
+      const commits = await gitIntelligence.loadFileHistory(currentFile, 3);
+      
+      if (commits.length > 0) {
+        // 🆕 TASK 19.5: Build formatted commit context
+        const commitContext = gitIntelligence.buildCommitContext(commits);
+        
+        // Add commit context to the current file's content
+        const currentFileContext = contextFiles.find(f => f.path === currentFile);
+        if (currentFileContext) {
+          currentFileContext.content = commitContext + '\n\n' + currentFileContext.content;
+          currentFileContext.reason += ' + Git History';
+        }
+      }
+    } catch (error) {
+      // Graceful degradation - don't fail if git is unavailable
+      console.warn('⚠️ Failed to add git context:', error);
+    }
+  }
 
-    return scores
-      .sort((a, b) => b.score - a.score)
-      .slice(0, topK)
-      .filter(f => f.score > 0.15);
+  /**
+   * 🆕 TASK 6.7: Get dependency depth from current file
+   * Returns 0 for current file, 1 for direct dependencies, 2 for transitive, etc.
+   */
+  private getDependencyDepth(filePath: string, currentFile?: string): number {
+    if (!currentFile || filePath === currentFile) {
+      return 0;
+    }
+
+    if (!this.dependencyGraph) {
+      return 999; // Unknown depth
+    }
+
+    const currentAnalysis = this.semanticCache.get(currentFile);
+    if (!currentAnalysis) {
+      return 999;
+    }
+
+    // Check if it's a direct dependency
+    if (currentAnalysis.dependencies.includes(filePath)) {
+      return 1;
+    }
+
+    // Check if it's a direct dependent
+    if (currentAnalysis.dependents.includes(filePath)) {
+      return 1;
+    }
+
+    // Check transitive dependencies (BFS)
+    const visited = new Set<string>();
+    const queue: Array<{ path: string; depth: number }> = [{ path: currentFile, depth: 0 }];
+
+    while (queue.length > 0) {
+      const { path, depth } = queue.shift()!;
+      
+      if (visited.has(path) || depth > 3) continue;
+      visited.add(path);
+
+      const analysis = this.semanticCache.get(path);
+      if (!analysis) continue;
+
+      // Check dependencies
+      for (const dep of analysis.dependencies) {
+        if (dep === filePath) {
+          return depth + 1;
+        }
+        if (!visited.has(dep)) {
+          queue.push({ path: dep, depth: depth + 1 });
+        }
+      }
+
+      // Check dependents
+      for (const dependent of analysis.dependents) {
+        if (dependent === filePath) {
+          return depth + 1;
+        }
+        if (!visited.has(dependent)) {
+          queue.push({ path: dependent, depth: depth + 1 });
+        }
+      }
+    }
+
+    return 999; // Not connected
   }
 
   /**
    * Query'de geçen keyword'lere göre dosya bul
+   * 🆕 TASK 6.1: Hybrid ranking - keyword matching component
    */
   private findKeywordMatches(
     query: string,
     files: FileIndex[]
-  ): Array<{ path: string; content: string }> {
+  ): Array<{ path: string; content: string; matchCount: number }> {
     const keywords = query.toLowerCase().split(/\s+/);
     const matches: Array<{ path: string; content: string; matchCount: number }> = [];
 
@@ -465,7 +584,130 @@ export class SmartContextBuilder {
 
     return matches
       .sort((a, b) => b.matchCount - a.matchCount)
-      .map(({ path, content }) => ({ path, content }));
+      .map(({ path, content, matchCount }) => ({ path, content, matchCount }));
+  }
+
+  /**
+   * 🆕 TASK 6.5: Calculate impact score for a file
+   * Impact score = number of files that depend on this file (direct + transitive)
+   */
+  private calculateImpactScore(filePath: string): number {
+    if (!this.dependencyGraph) {
+      return 0;
+    }
+
+    const analysis = this.semanticCache.get(filePath);
+    if (!analysis || !analysis.dependents) {
+      return 0;
+    }
+
+    // Direct dependents
+    const directDependents = analysis.dependents.length;
+
+    // Transitive dependents (files that depend on our dependents)
+    const transitiveDependents = new Set<string>();
+    const visited = new Set<string>();
+
+    const collectTransitive = (path: string, depth: number) => {
+      if (depth > 3 || visited.has(path)) return; // Limit depth to avoid cycles
+      visited.add(path);
+
+      const pathAnalysis = this.semanticCache.get(path);
+      if (pathAnalysis && pathAnalysis.dependents) {
+        pathAnalysis.dependents.forEach(dependent => {
+          if (dependent !== filePath) {
+            transitiveDependents.add(dependent);
+            collectTransitive(dependent, depth + 1);
+          }
+        });
+      }
+    };
+
+    analysis.dependents.forEach(dep => collectTransitive(dep, 1));
+
+    // Impact score = direct + (transitive * 0.5)
+    const impactScore = directDependents + (transitiveDependents.size * 0.5);
+
+    return impactScore;
+  }
+
+  /**
+   * 🆕 TASK 6.1: Hybrid ranking algorithm
+   * Combines embedding similarity, keyword matching, and symbol-level relevance
+   */
+  private calculateHybridScore(
+    file: FileIndex,
+    query: string,
+    queryEmbedding: number[],
+    keywordMatches: Map<string, number>
+  ): number {
+    // Component 1: Embedding similarity (0-1 range, weight: 0.4)
+    const embeddingScore = cosineSimilarity(queryEmbedding, file.embedding);
+    const embeddingWeight = 0.4;
+
+    // Component 2: Keyword matching (normalize to 0-1 range, weight: 0.3)
+    const keywordCount = keywordMatches.get(file.path) || 0;
+    const maxKeywordCount = Math.max(...Array.from(keywordMatches.values()), 1);
+    const keywordScore = keywordCount / maxKeywordCount;
+    const keywordWeight = 0.3;
+
+    // Component 3: Symbol-level relevance (0-1 range, weight: 0.3)
+    const symbolScore = this.calculateSymbolRelevance(file.path, query);
+    const symbolWeight = 0.3;
+
+    // Combine scores with weights
+    const hybridScore = 
+      (embeddingScore * embeddingWeight) +
+      (keywordScore * keywordWeight) +
+      (symbolScore * symbolWeight);
+
+    return hybridScore;
+  }
+
+  /**
+   * 🆕 TASK 6.1: Calculate symbol-level relevance
+   * Uses SymbolResolver to find symbol matches in query
+   */
+  private calculateSymbolRelevance(filePath: string, query: string): number {
+    // Extract potential symbol names from query (camelCase, PascalCase, snake_case)
+    const symbolPattern = /\b[a-zA-Z_][a-zA-Z0-9_]*\b/g;
+    const potentialSymbols = query.match(symbolPattern) || [];
+    
+    if (potentialSymbols.length === 0) {
+      return 0;
+    }
+
+    let relevanceScore = 0;
+    const fileSymbols = symbolResolver.getSymbolsInFile(filePath);
+    
+    potentialSymbols.forEach(querySymbol => {
+      // Check if this file defines the symbol
+      const definition = symbolResolver.resolveDefinition(querySymbol);
+      if (definition && definition.file_path === filePath) {
+        relevanceScore += 1.0; // High score for definition
+      }
+
+      // Check if this file references the symbol
+      const references = symbolResolver.findReferences(querySymbol);
+      const hasReference = references.some(ref => ref.file_path === filePath);
+      if (hasReference) {
+        relevanceScore += 0.5; // Medium score for reference
+      }
+
+      // Check for fuzzy symbol matches in this file
+      const fuzzyMatches = fileSymbols.filter(sym => 
+        sym.symbol.toLowerCase().includes(querySymbol.toLowerCase()) ||
+        querySymbol.toLowerCase().includes(sym.symbol.toLowerCase())
+      );
+      if (fuzzyMatches.length > 0) {
+        relevanceScore += 0.3 * fuzzyMatches.length; // Lower score for fuzzy matches
+      }
+    });
+
+    // Normalize to 0-1 range (assume max 3 relevant symbols per query)
+    const normalizedScore = Math.min(relevanceScore / 3.0, 1.0);
+    
+    return normalizedScore;
   }
 
   /**
@@ -631,22 +873,30 @@ export class SmartContextBuilder {
   
   /**
    * 🆕 TASK 28: Clear semantic cache
+   * 🆕 TASK 5.6: SymbolResolver cache'ini de temizle
    */
   clearSemanticCache(): void {
     this.semanticCache.clear();
     this.dependencyGraph = null;
     this.lastGraphUpdate = 0;
+    symbolResolver.clear();
     console.log('🗑️ Semantic cache cleared');
   }
   
   /**
    * 🆕 TASK 28: Get semantic stats
+   * 🆕 TASK 5.6: SymbolResolver stats'ları da dahil et
    */
   getSemanticStats(): {
     cachedFiles: number;
     totalSymbols: number;
     graphNodes: number;
     graphEdges: number;
+    symbolIndex: {
+      definitionCount: number;
+      referenceCount: number;
+      exportCount: number;
+    };
   } {
     const totalSymbols = Array.from(this.semanticCache.values())
       .reduce((sum, analysis) => sum + analysis.symbols.length, 0);
@@ -660,7 +910,8 @@ export class SmartContextBuilder {
       cachedFiles: this.semanticCache.size,
       totalSymbols,
       graphNodes: this.dependencyGraph?.nodes.size || 0,
-      graphEdges
+      graphEdges,
+      symbolIndex: symbolResolver.getStats()
     };
   }
 

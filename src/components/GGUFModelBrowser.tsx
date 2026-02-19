@@ -61,7 +61,7 @@ const calculateRequirements = (model: GGUFModel, contextLength: number = 4096): 
   const sizeGB = model.sizeBytes / (1024 ** 3);
   const quantInfo = QUANT_INFO[model.quantization] || { vramMultiplier: 0.5 };
   const contextRAM = (contextLength / 1000) * sizeGB * 0.002;
-  
+
   return {
     minRAM: Math.ceil(sizeGB * 1.2),
     minVRAM: Math.ceil(sizeGB * quantInfo.vramMultiplier),
@@ -99,19 +99,14 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
   const [sortBy, setSortBy] = useState<'name' | 'size' | 'recent' | 'usage'>('name');
   const [filterBy, setFilterBy] = useState<'all' | 'favorites' | 'downloaded'>('all');
   const [activeTab, setActiveTab] = useState<'basic' | 'advanced' | 'logs' | 'history'>('basic');
-  
-  // 🆕 Gelişmiş Filtreler
-  const [sizeFilter, setSizeFilter] = useState<'all' | 'small' | 'medium' | 'large'>('all');
-  const [quantFilter, setQuantFilter] = useState<'all' | 'Q4' | 'Q5' | 'Q6' | 'Q8'>('all');
-  const [paramFilter, setParamFilter] = useState<'all' | '3B' | '7B' | '13B+'>('all');
-  
+
   // 🆕 Gelişmiş Sampling Parametreleri
   const [temperature, setTemperature] = useState<number>(0.7);
   const [topP, setTopP] = useState<number>(0.9);
   const [topK, setTopK] = useState<number>(40);
   const [repeatPenalty, setRepeatPenalty] = useState<number>(1.1);
   const [minP, setMinP] = useState<number>(0.05);
-  
+
   // 🆕 Yeni Özellikler için State'ler
   const [modelMetadata, setModelMetadata] = useState<any>(null);
   const [performanceLogs, setPerformanceLogs] = useState<Array<{
@@ -132,13 +127,13 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     tokensUsed: number;
   }>>([]);
   const [downloadQueue, setDownloadQueue] = useState<GGUFModel[]>([]);
-  
+
   // 🆕 Modal state'leri
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showFilterModal, setShowFilterModal] = useState(false);
   const [showCleanupModal, setShowCleanupModal] = useState(false);
   const [selectedForCleanup, setSelectedForCleanup] = useState<string[]>([]);
-  
+
   // 🆕 GPU Backend Info
   const [gpuBackendInfo, setGpuBackendInfo] = useState<{
     backend: string;
@@ -148,7 +143,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     cuda_download_url: string;
     message: string;
   } | null>(null);
-  
+
   // 🆕 Model Registry - GPU Info & Backend Recommendation
   const [gpuInfo, setGpuInfo] = useState<{
     available: boolean;
@@ -158,7 +153,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     freeVRAM_GB: number;
     recommendedBackend: string;
   } | null>(null);
-  
+
   const [backendRecommendation, setBackendRecommendation] = useState<{
     backend: string;
     reason: string;
@@ -166,6 +161,20 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     expectedPerformance: string;
     warnings: string[];
   } | null>(null);
+
+  // 🆕 Kullanım istatistiklerini güncelle
+  const updateModelUsage = (modelId: string) => {
+    const newModels = models.map(m =>
+      m.id === modelId
+        ? {
+          ...m,
+          lastUsed: Date.now(),
+          usageCount: (m.usageCount || 0) + 1
+        }
+        : m
+    );
+    saveModels(newModels);
+  };
 
   // 🆕 Konuşma geçmişi kaydet - Export edilebilir hale getirmek için window'a ekle
   const saveConversationHistory = (modelId: string, modelName: string, prompt: string, response: string, tokensUsed: number) => {
@@ -177,7 +186,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       response,
       tokensUsed
     };
-    
+
     const updatedHistory = [newEntry, ...conversationHistory].slice(0, 100); // Son 100 konuşma
     setConversationHistory(updatedHistory);
     localStorage.setItem('gguf-conversation-history', JSON.stringify(updatedHistory));
@@ -192,7 +201,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       setDownloadFolder(saved);
       checkDownloadedModels(saved);
     }
-    
+
     const savedModels = localStorage.getItem('gguf-models');
     if (savedModels) {
       try {
@@ -201,7 +210,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         console.error('Model yükleme hatası:', error);
       }
     }
-    
+
     // 🆕 Performans loglarını yükle
     const savedLogs = localStorage.getItem('gguf-performance-logs');
     if (savedLogs) {
@@ -211,7 +220,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         console.error('Log yükleme hatası:', error);
       }
     }
-    
+
     // 🆕 Konuşma geçmişini yükle
     const savedHistory = localStorage.getItem('gguf-conversation-history');
     if (savedHistory) {
@@ -221,23 +230,77 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         console.error('Geçmiş yükleme hatası:', error);
       }
     }
-    
+
+    // 🆕 Download Manager - Aktif indirmeleri yükle
+    const initDownloadManager = async () => {
+      try {
+        const { downloadManager } = await import('../services/downloadManager');
+
+        // Aktif indirmeleri kontrol et
+        const activeDownloads = downloadManager.getActiveDownloads();
+        console.log(`📥 ${activeDownloads.length} aktif indirme bulundu`);
+
+        // Aktif indirmeleri model listesine yansıt
+        if (activeDownloads.length > 0) {
+          setModels(prev => prev.map(model => {
+            const activeDownload = activeDownloads.find(d => d.url === model.downloadUrl);
+            if (activeDownload) {
+              return {
+                ...model,
+                isDownloading: true,
+                downloadProgress: activeDownload.progress,
+                downloadedBytes: activeDownload.downloadedSize
+              };
+            }
+            return model;
+          }));
+        }
+
+        // Global listener ekle - tüm indirme güncellemelerini dinle
+        const unsubscribe = downloadManager.onAnyTaskUpdate((task) => {
+          setModels(prev => prev.map(model => {
+            if (model.downloadUrl === task.url) {
+              return {
+                ...model,
+                isDownloading: task.status === 'downloading',
+                downloadProgress: task.progress,
+                downloadedBytes: task.downloadedSize,
+                isDownloaded: task.status === 'completed',
+                localPath: task.status === 'completed' ? task.destination : model.localPath
+              };
+            }
+            return model;
+          }));
+        });
+
+        // Cleanup
+        return () => {
+          unsubscribe();
+        };
+      } catch (error) {
+        console.error('Download Manager başlatılamadı:', error);
+      }
+    };
+
+    initDownloadManager();
+
     // 🆕 GPU'da aktif model kontrolü
     const checkActiveGpuModel = async () => {
       try {
         const { getGgufModelStatus } = await import('../services/ggufProvider');
         const status = await getGgufModelStatus();
-        if (status.loaded && status.model_path) {
-          setActiveGpuModel(status.model_path);
-          console.log('🎮 GPU\'da aktif model:', status.model_path);
+        if (status.loaded && status.loaded_models && status.loaded_models.length > 0) {
+          // İlk modeli varsayılan aktif olarak göster
+          setActiveGpuModel(status.loaded_models[0]);
+          console.log('🎮 GPU\'da aktif modeller:', status.loaded_models);
         }
       } catch (error) {
         console.error('GPU model status kontrolü hatası:', error);
       }
     };
-    
+
     checkActiveGpuModel();
-    
+
     // 🆕 GPU Backend bilgisini al
     const checkGpuBackend = async () => {
       try {
@@ -248,9 +311,10 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         console.error('GPU backend kontrolü hatası:', error);
       }
     };
-    
+
     checkGpuBackend();
-    
+
+
     // 🆕 Model Registry - GPU Info Detection
     const detectGPU = async () => {
       try {
@@ -258,7 +322,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         const info = await getGPUInfo();
         setGpuInfo(info);
         console.log('🎮 GPU Info:', info);
-        
+
         // Auto-set GPU layers based on VRAM
         if (info.available && info.totalVRAM_GB > 0) {
           const { calculateOptimalGPULayers } = await import('../services/modelRegistry');
@@ -270,9 +334,9 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         console.error('GPU detection error:', error);
       }
     };
-    
+
     detectGPU();
-    
+
     // 🆕 GPU memory bilgisini periyodik olarak güncelle
     const updateGpuMemory = async () => {
       try {
@@ -283,13 +347,13 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         console.error('GPU memory güncelleme hatası:', error);
       }
     };
-    
+
     // İlk yüklemede güncelle
     updateGpuMemory();
-    
+
     // Her 3 saniyede bir güncelle
     const interval = setInterval(updateGpuMemory, 3000);
-    
+
     return () => {
       clearInterval(interval);
     };
@@ -309,49 +373,49 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         const response = await fetch(
           `https://huggingface.co/api/models?search=${encodeURIComponent(hfSearchQuery)}&filter=gguf&sort=downloads&limit=20`
         );
-        
+
         if (!response.ok) {
           console.error('HF API hatası:', response.status);
           throw new Error('Arama başarısız');
         }
-        
+
         const data: HuggingFaceModel[] = await response.json();
         console.log('HF API sonuçları:', data.length, 'model bulundu');
-        
+
         // 🆕 Duplicate temizleme için Map kullan
         const uniqueModels = new Map<string, GGUFModel>();
-        
+
         for (const model of data) {
           try {
             // Base model adını çıkar (quantization olmadan)
             const baseModelName = model.id.split('/').pop()?.replace(/-GGUF$/i, '') || model.id;
-            
+
             // Eğer bu base model zaten varsa, atla
             if (uniqueModels.has(baseModelName)) {
               console.log(`⏭️ Duplicate atlandı: ${model.id}`);
               continue;
             }
-            
+
             // Her model için dosya listesini al
             const filesResponse = await fetch(`https://huggingface.co/api/models/${model.id}/tree/main`);
             if (!filesResponse.ok) continue;
-            
+
             const files = await filesResponse.json();
             const ggufFiles = files.filter((f: any) => f.path && f.path.endsWith('.gguf'));
-            
+
             console.log(`${model.id}: ${ggufFiles.length} GGUF dosyası bulundu`);
-            
+
             // Sadece ilk GGUF dosyasını al (genelde en popüler quantization)
             if (ggufFiles.length > 0) {
               const file = ggufFiles[0]; // İlk dosya
               const fileName = file.path;
               const sizeBytes = file.size || 0;
               const sizeGB = (sizeBytes / (1024 ** 3)).toFixed(1);
-              
+
               // Quantization'ı dosya adından çıkar
               const quantMatch = fileName.match(/[Qq](\d+)_[KkMm]_?[MmLl]?/);
               const quant = quantMatch ? quantMatch[0].toUpperCase() : 'Q4_K_M';
-              
+
               // Parametre sayısını çıkar
               const paramMatch = fileName.match(/(\d+\.?\d*)[Bb]/);
               const params = paramMatch ? paramMatch[0].toUpperCase() : '';
@@ -399,7 +463,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     try {
       const files = await invoke<string[]>('get_all_files', { path: folder });
       const ggufFiles = files.filter(f => f.endsWith('.gguf'));
-      
+
       setModels(prev => prev.map(model => ({
         ...model,
         isDownloaded: ggufFiles.some(f => f.includes(model.name)),
@@ -451,11 +515,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     if (!confirm(confirmMsg)) return;
 
     // Model durumunu güncelle
-    setModels(prev => prev.map(m => 
-      m.id === model.id ? { 
-        ...m, 
-        isDownloading: true, 
-        downloadProgress: 0, 
+    setModels(prev => prev.map(m =>
+      m.id === model.id ? {
+        ...m,
+        isDownloading: true,
+        downloadProgress: 0,
         downloadedBytes: 0,
         downloadStartTime: Date.now()
       } : m
@@ -463,64 +527,58 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
     try {
       const destination = `${downloadFolder}\\${model.name}`;
-      
-      // Progress listener ekle
-      const { listen } = await import('@tauri-apps/api/event');
-      
-      const unlisten = await listen('download-progress', (event: any) => {
-        const payload = event.payload as { url: string; downloaded: number; total: number; progress: number };
-        
-        // Sadece bu modelin progress'ini güncelle
-        if (payload.url === model.downloadUrl) {
-          setModels(prev => prev.map(m => 
-            m.id === model.id ? { 
+
+      // 🆕 Download Manager kullan - arka planda çalışır
+      const { downloadManager } = await import('../services/downloadManager');
+
+      // İndirme progress'ini dinle
+      const unsubscribe = downloadManager.onAnyTaskUpdate((task) => {
+        if (task.url === model.downloadUrl) {
+          setModels(prev => prev.map(m =>
+            m.id === model.id ? {
               ...m,
-              isDownloading: true,
-              downloadProgress: payload.progress,
-              downloadedBytes: payload.downloaded
+              isDownloading: task.status === 'downloading',
+              downloadProgress: task.progress,
+              downloadedBytes: task.downloadedSize,
+              isDownloaded: task.status === 'completed',
+              localPath: task.status === 'completed' ? destination : m.localPath
             } : m
           ));
+
+          // Tamamlandıysa bildirim göster
+          if (task.status === 'completed') {
+            showToast(`✅ ${model.displayName} indirildi!`, 'success');
+            unsubscribe(); // Listener'ı temizle
+          } else if (task.status === 'failed') {
+            showToast(`❌ İndirme başarısız: ${task.error}`, 'error');
+            unsubscribe();
+          }
         }
       });
 
-      await invoke('download_gguf_model', {
-        url: model.downloadUrl,
-        destination: destination
-      });
+      // İndirmeyi başlat (arka planda devam eder)
+      await downloadManager.startDownload(
+        model.downloadUrl,
+        destination,
+        model.displayName
+      );
 
-      // Listener'ı temizle
-      unlisten();
-
-      alert(`✅ İndirme tamamlandı!\n\nModel: ${model.displayName}\nKonum: ${destination}`);
-
-      // Model durumunu güncelle
-      setModels(prev => prev.map(m => 
-        m.id === model.id ? { 
-          ...m, 
-          isDownloading: false, 
-          isDownloaded: true,
-          localPath: destination,
-          downloadProgress: 100,
-          downloadedBytes: model.sizeBytes
-        } : m
-      ));
+      showToast(`📥 ${model.displayName} indiriliyor... (Arka planda devam edecek)`, 'info');
 
       // LocalStorage'ı güncelle
-      const updatedModels = models.map(m => 
-        m.id === model.id ? { 
-          ...m, 
-          isDownloading: false, 
-          isDownloaded: true,
-          localPath: destination 
+      const updatedModels = models.map(m =>
+        m.id === model.id ? {
+          ...m,
+          isDownloading: true
         } : m
       );
       saveModels(updatedModels);
 
     } catch (error) {
       console.error('İndirme hatası:', error);
-      alert('❌ İndirme başarısız: ' + error);
-      
-      setModels(prev => prev.map(m => 
+      showToast('❌ İndirme başarısız: ' + error, 'error');
+
+      setModels(prev => prev.map(m =>
         m.id === model.id ? { ...m, isDownloading: false, downloadProgress: 0, downloadedBytes: 0 } : m
       ));
     }
@@ -536,11 +594,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
       if (selected && typeof selected === 'string') {
         const fileName = selected.split(/[/\\]/).pop() || '';
-        
+
         // 🆕 Dosya boyutunu al
         let sizeBytes = 0;
         let sizeStr = 'Bilinmiyor';
-        
+
         try {
           // Tauri'nin file system API'sini kullanarak dosya boyutunu al
           const fileInfo = await invoke<{ size: number }>('get_file_size', { path: selected });
@@ -551,15 +609,15 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         } catch (error) {
           console.error('Dosya boyutu alınamadı:', error);
         }
-        
+
         // Quantization'ı dosya adından çıkar
         const quantMatch = fileName.match(/[Qq](\d+)_[KkMm]_?[MmLl]?/);
         const quant = quantMatch ? quantMatch[0].toUpperCase() : 'Q4_K_M';
-        
+
         // Parametre sayısını çıkar
         const paramMatch = fileName.match(/(\d+\.?\d*)[Bb]/);
         const params = paramMatch ? paramMatch[0].toUpperCase() : '';
-        
+
         const customModel: GGUFModel = {
           id: 'custom-' + Date.now(),
           name: fileName,
@@ -580,10 +638,10 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         // Modeli listeye ekle
         const newModels = [...models, customModel];
         saveModels(newModels);
-        
+
         // Ayar panelini aç
         setSelectedModelForConfig(customModel);
-        
+
         showToast(`${fileName} eklendi (${sizeStr})`, 'success');
       }
     } catch (error) {
@@ -598,10 +656,10 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     const newModels = [...models, modelToAdd];
     setModels(newModels);
     saveModels(newModels);
-    
+
     // Arama sonuçlarından kaldır
     setHfSearchResults(prev => prev.filter(m => m.id !== model.id));
-    
+
     // İndirmeyi başlat (state güncellensin diye setTimeout kullan)
     setTimeout(() => {
       downloadModel(modelToAdd);
@@ -613,22 +671,22 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       alert('⚠️ Bu model henüz indirilmemiş. Önce indirin.');
       return;
     }
-    
+
     // Ayar panelini aç
     setSelectedModelForConfig(model);
-    
+
     // 🆕 Model Registry - Backend Recommendation
     if (model.localPath) {
       try {
         const { getBackendRecommendation } = await import('../services/modelRegistry');
         const recommendation = await getBackendRecommendation(model.localPath);
         setBackendRecommendation(recommendation);
-        
+
         // Auto-set GPU layers
         setGpuLayers(recommendation.gpuLayers);
-        
+
         console.log('🎯 Backend Recommendation:', recommendation);
-        
+
         // Show recommendation toast
         if (recommendation.warnings.length > 0) {
           showToast(recommendation.warnings[0], 'warning');
@@ -646,24 +704,24 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
   const applyModelConfig = async () => {
     if (!selectedModelForConfig) return;
-    
+
     setIsLoadingToGPU(true);
     setLoadingProgress(0);
-    
+
     try {
       // 🔥 Context Length (INPUT) - Model'in alabileceği maksimum prompt uzunluğu
       // Max Tokens (OUTPUT) - AI'nın üretebileceği maksimum cevap uzunluğu
       const modelContextLength = contextLength; // UI'daki slider (32K default)
-      const maxOutputTokens = 
+      const maxOutputTokens =
         outputMode === 'brief' ? 2048 :
-        outputMode === 'detailed' ? 16384 : 8192;
-      
+          outputMode === 'detailed' ? 16384 : 8192;
+
       // Output mode'u localStorage'a kaydet (ai.ts kullanacak)
       localStorage.setItem('ai-output-mode', outputMode);
-      
+
       console.log('📏 Context Length (INPUT):', modelContextLength);
       console.log('📤 Max Tokens (OUTPUT):', maxOutputTokens, `(${outputMode})`);
-      
+
       // GGUF model config'ini localStorage'a kaydet
       const ggufConfig = {
         modelPath: selectedModelForConfig.localPath,
@@ -671,18 +729,18 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         gpuLayers: gpuLayers,
         modelName: selectedModelForConfig.displayName
       };
-      
+
       localStorage.setItem('gguf-active-model', JSON.stringify(ggufConfig));
       console.log('💾 GGUF model config kaydedildi:', ggufConfig);
-      
+
       // Context ve GPU layers ayarlarını modele uygula
       const updatedModel = {
         ...selectedModelForConfig,
         contextLength: modelContextLength // INPUT context length
       };
-      
+
       setLoadingProgress(5);
-      
+
       // 🆕 Simüle edilmiş progress bar (model yükleme sırasında)
       const progressInterval = setInterval(() => {
         setLoadingProgress(prev => {
@@ -693,14 +751,14 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
           return prev;
         });
       }, 500);
-      
+
       // 🆕 Modeli GPU'ya yükle
       console.log('🔄 Model GPU\'ya yükleniyor...');
       console.log('🔄 Context Length (INPUT):', modelContextLength);
       console.log('🔄 Max Tokens (OUTPUT):', maxOutputTokens);
       console.log('🔬 Sampling Params:', { temperature, topP, topK, repeatPenalty, minP });
       const { loadGgufModel } = await import('../services/ggufProvider');
-      
+
       // Model yükleme işlemi
       await loadGgufModel({
         modelPath: ggufConfig.modelPath!,
@@ -713,17 +771,17 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         minP: minP,
         maxTokens: maxOutputTokens // OUTPUT - 4096 sabit
       });
-      
+
       // Progress interval'i durdur
       clearInterval(progressInterval);
       setLoadingProgress(92);
-      
+
       console.log('✅ Model GPU\'ya yüklendi!');
-      
+
       // 🆕 Aktif GPU modelini güncelle
       setActiveGpuModel(ggufConfig.modelPath!);
       setLoadingProgress(94);
-      
+
       // 🆕 Model yüklendikten sonra metadata'yı otomatik oku
       try {
         const metadata = await invoke<any>('read_gguf_metadata', { path: ggufConfig.modelPath });
@@ -733,24 +791,24 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         console.warn('⚠️ Metadata okunamadı:', error);
         // Hata olsa bile devam et
       }
-      
+
       // 🆕 GGUF modelini AI Settings'e ekle
       const savedProvidersForUpdate = localStorage.getItem('corex-ai-providers');
       if (savedProvidersForUpdate) {
         try {
           const providers = JSON.parse(savedProvidersForUpdate);
           const ggufProvider = providers.find((p: any) => p.id === 'gguf-direct');
-          
+
           setLoadingProgress(96);
-          
+
           if (ggufProvider) {
             // Modeli GGUF provider'a ekle (eğer yoksa)
             const modelExists = ggufProvider.models.some((m: any) => m.id === selectedModelForConfig.id);
-            
+
+            // ÖNCE tüm GGUF modellerini deaktif et (Tek model kuralı)
+            ggufProvider.models = ggufProvider.models.map((m: any) => ({ ...m, isActive: false }));
+
             if (!modelExists) {
-              // Önce diğer tüm modelleri pasif yap
-              ggufProvider.models = ggufProvider.models.map((m: any) => ({ ...m, isActive: false }));
-              
               // Yeni model ekle ve aktif et
               ggufProvider.models.push({
                 id: selectedModelForConfig.id,
@@ -758,53 +816,43 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 displayName: selectedModelForConfig.displayName,
                 description: selectedModelForConfig.description,
                 specialty: 'GGUF Model',
-                maxTokens: maxOutputTokens, // OUTPUT token limiti (4096)
-                contextLength: modelContextLength, // INPUT context length (32K)
+                maxTokens: maxOutputTokens,
+                contextLength: modelContextLength,
                 temperature: 0.7,
-                isActive: true // Yeni eklenen model otomatik aktif
+                isActive: true
               });
               console.log('✅ Yeni model eklendi ve aktif edildi:', selectedModelForConfig.displayName);
             } else {
               // Mevcut modeli güncelle ve aktif et
-              ggufProvider.models = ggufProvider.models.map((m: any) => 
-                m.id === selectedModelForConfig.id 
+              ggufProvider.models = ggufProvider.models.map((m: any) =>
+                m.id === selectedModelForConfig.id
                   ? { ...m, isActive: true, maxTokens: maxOutputTokens, contextLength: modelContextLength }
-                  : { ...m, isActive: false } // Diğerlerini pasif yap
+                  : m
               );
-              console.log('✅ Mevcut model güncellendi ve aktif edildi:', selectedModelForConfig.displayName);
+              console.log('✅ Mevcut model aktif edildi:', selectedModelForConfig.displayName);
             }
-            
+
             setLoadingProgress(98);
-            
-            // GGUF provider'ı aktif et
             ggufProvider.isActive = true;
-            
-            // Diğer provider'ların modellerini pasif yap (sadece bir model aktif olsun)
+
+            // Diğer provider'ların modellerini pasif yap
             providers.forEach((p: any) => {
               if (p.id !== 'gguf-direct') {
                 p.models = p.models.map((m: any) => ({ ...m, isActive: false }));
-                p.isActive = false; // Provider'ı da pasif yap
+                p.isActive = false;
               }
             });
-          
+
             localStorage.setItem('corex-ai-providers', JSON.stringify(providers));
-            console.log('✅ GGUF model AI Settings\'e kaydedildi');
-            console.log('📊 Aktif provider:', ggufProvider.id);
-            console.log('📊 Aktif model:', ggufProvider.models.find((m: any) => m.isActive)?.displayName);
-            
-            // Provider güncelleme eventi gönder
-            window.dispatchEvent(new CustomEvent('ai-providers-updated', { 
-              detail: providers 
-            }));
+            window.dispatchEvent(new CustomEvent('ai-providers-updated', { detail: providers }));
           } else {
             // GGUF provider yoksa oluştur
-            console.log('⚠️ GGUF provider bulunamadı, oluşturuluyor...');
             const newGgufProvider = {
               id: 'gguf-direct',
               name: 'GGUF Direct',
               displayName: 'GGUF Models (GPU)',
               description: 'Yerel GGUF modelleri doğrudan GPU\'da çalıştırır',
-              baseUrl: 'internal://gguf', // ✅ Doğru baseUrl
+              baseUrl: 'internal://gguf',
               apiKey: '',
               isActive: true,
               models: [{
@@ -813,47 +861,41 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 displayName: selectedModelForConfig.displayName,
                 description: selectedModelForConfig.description,
                 specialty: 'GGUF Model',
-                maxTokens: maxOutputTokens, // OUTPUT (4096)
-                contextLength: modelContextLength, // INPUT (32K)
+                maxTokens: maxOutputTokens,
+                contextLength: modelContextLength,
                 temperature: 0.7,
                 isActive: true
               }]
             };
-            
-            // Diğer tüm provider'ları pasif yap
+
             providers.forEach((p: any) => {
               p.isActive = false;
               p.models = p.models.map((m: any) => ({ ...m, isActive: false }));
             });
-            
+
             providers.push(newGgufProvider);
             localStorage.setItem('corex-ai-providers', JSON.stringify(providers));
-            console.log('✅ GGUF provider oluşturuldu ve aktif edildi');
-            
-            // Provider güncelleme eventi gönder
-            window.dispatchEvent(new CustomEvent('ai-providers-updated', { 
-              detail: providers 
-            }));
+            window.dispatchEvent(new CustomEvent('ai-providers-updated', { detail: providers }));
           }
         } catch (error) {
           console.error('❌ AI Settings güncelleme hatası:', error);
         }
       }
-      
+
       setLoadingProgress(100);
-      
+
       // 🆕 Kullanım istatistiklerini güncelle
       updateModelUsage(selectedModelForConfig.id);
-      
+
       onModelSelect(updatedModel);
       setSelectedModelForConfig(null);
-      
+
       setTimeout(() => {
         setIsLoadingToGPU(false);
         setLoadingProgress(0);
-        showToast(`${selectedModelForConfig.displayName} GPU'ya yüklendi! Context: ${(modelContextLength/1000).toFixed(0)}K, Output: ${maxOutputTokens}`, 'success');
+        showToast(`${selectedModelForConfig.displayName} GPU'ya yüklendi! Context: ${(modelContextLength / 1000).toFixed(0)}K, Output: ${maxOutputTokens}`, 'success');
       }, 500);
-    
+
     } catch (error) {
       console.error('❌ Model yükleme hatası:', error);
       setIsLoadingToGPU(false);
@@ -871,11 +913,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
   // 🆕 Favori toggle
   const toggleFavorite = (modelId: string) => {
-    const newModels = models.map(m => 
+    const newModels = models.map(m =>
       m.id === modelId ? { ...m, isFavorite: !m.isFavorite } : m
     );
     saveModels(newModels);
-    
+
     const model = newModels.find(m => m.id === modelId);
     if (model) {
       showToast(
@@ -883,20 +925,6 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         'success'
       );
     }
-  };
-
-  // 🆕 Kullanım istatistiklerini güncelle
-  const updateModelUsage = (modelId: string) => {
-    const newModels = models.map(m => 
-      m.id === modelId 
-        ? { 
-            ...m, 
-            lastUsed: Date.now(),
-            usageCount: (m.usageCount || 0) + 1
-          } 
-        : m
-    );
-    saveModels(newModels);
   };
 
   // 🆕 Benchmark çalıştır
@@ -916,15 +944,15 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
     try {
       const { runBenchmark: runBench } = await import('../services/benchmarkService');
       const result = await runBench(model.localPath, contextLength, gpuLayers);
-      
+
       // 🆕 Performans logunu kaydet
       savePerformanceLog(model.id, model.displayName, result.averageTokensPerSecond);
-      
+
       showToast(
         `Benchmark tamamlandı! Hız: ${result.averageTokensPerSecond.toFixed(1)} token/s`,
         'success'
       );
-      
+
       console.log('📊 Benchmark sonucu:', result);
     } catch (error) {
       console.error('❌ Benchmark hatası:', error);
@@ -938,13 +966,13 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
   const readModelMetadata = async (modelPath: string) => {
     try {
       showToast('Metadata okunuyor...', 'info');
-      
+
       // Model Registry kullan
       const { readModelMetadata: readMeta } = await import('../services/modelRegistry');
       const metadata = await readMeta(modelPath);
-      
+
       setModelMetadata(metadata);
-      
+
       // Show detailed info
       const info = `
 📊 Model Bilgileri:
@@ -962,7 +990,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 • ${metadata.recommendedBackend.toUpperCase()}
 • GPU Layers: ${metadata.recommendedGPULayers}/33
       `.trim();
-      
+
       console.log(info);
       showToast('Metadata başarıyla okundu!', 'success');
     } catch (error) {
@@ -982,7 +1010,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       gpuLayers,
       temperature
     };
-    
+
     const updatedLogs = [newLog, ...performanceLogs].slice(0, 50); // Son 50 log
     setPerformanceLogs(updatedLogs);
     localStorage.setItem('gguf-performance-logs', JSON.stringify(updatedLogs));
@@ -994,7 +1022,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       showToast('Model zaten kuyrukta!', 'warning');
       return;
     }
-    
+
     setDownloadQueue([...downloadQueue, model]);
     showToast(`${model.displayName} kuyruğa eklendi`, 'success');
   };
@@ -1005,19 +1033,19 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       showToast('Kuyruk boş!', 'warning');
       return;
     }
-    
+
     for (const model of downloadQueue) {
       await downloadModel(model);
       setDownloadQueue(prev => prev.filter(m => m.id !== model.id));
     }
-    
+
     showToast('Tüm indirmeler tamamlandı!', 'success');
   };
 
   // 🆕 Otomatik model önerileri
   const getModelSuggestions = () => {
     const suggestions: Array<{ reason: string; model: GGUFModel }> = [];
-    
+
     // En çok kullanılan model
     const mostUsed = [...models].sort((a, b) => (b.usageCount || 0) - (a.usageCount || 0))[0];
     if (mostUsed && mostUsed.usageCount && mostUsed.usageCount > 0) {
@@ -1026,7 +1054,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         model: mostUsed
       });
     }
-    
+
     // En son kullanılan model
     const recentlyUsed = [...models].sort((a, b) => (b.lastUsed || 0) - (a.lastUsed || 0))[0];
     if (recentlyUsed && recentlyUsed.lastUsed) {
@@ -1035,7 +1063,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         model: recentlyUsed
       });
     }
-    
+
     // Favori modeller
     const favorites = models.filter(m => m.isFavorite);
     if (favorites.length > 0) {
@@ -1044,7 +1072,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         model: favorites[0]
       });
     }
-    
+
     // Performans bazlı öneri (en hızlı model)
     if (performanceLogs.length > 0) {
       const fastestLog = [...performanceLogs].sort((a, b) => b.tokensPerSecond - a.tokensPerSecond)[0];
@@ -1056,7 +1084,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         });
       }
     }
-    
+
     return suggestions;
   };
 
@@ -1083,7 +1111,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
   const getCleanupSuggestions = () => {
     const suggestions = [];
-    
+
     // Hiç kullanılmayanlar
     const neverUsed = getNeverUsedModels();
     if (neverUsed.length > 0) {
@@ -1096,7 +1124,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         reason: 'Bu modeller hiç kullanılmadı'
       });
     }
-    
+
     // 60+ gün kullanılmayanlar
     const unused60 = getUnusedModels(60);
     if (unused60.length > 0) {
@@ -1109,7 +1137,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         reason: '60 günden fazla kullanılmadı'
       });
     }
-    
+
     // 30+ gün kullanılmayanlar
     const unused30 = getUnusedModels(30);
     if (unused30.length > 0) {
@@ -1122,7 +1150,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         reason: '30 günden fazla kullanılmadı'
       });
     }
-    
+
     return suggestions;
   };
 
@@ -1131,63 +1159,70 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       showToast('Silinecek model seçilmedi', 'warning');
       return;
     }
-    
+
     const confirmMsg = `${selectedForCleanup.length} model silinecek. Emin misiniz?\n\nBu işlem geri alınamaz!`;
     if (!confirm(confirmMsg)) return;
-    
+
     const newModels = models.filter(m => !selectedForCleanup.includes(m.id));
     saveModels(newModels);
     setSelectedForCleanup([]);
     setShowCleanupModal(false);
-    
+
     showToast(`${selectedForCleanup.length} model temizlendi!`, 'success');
   };
 
   // 🆕 GPU'dan model kaldır
-  const unloadFromGPU = async () => {
-    if (!confirm('GPU\'dan modeli kaldırmak istediğinize emin misiniz?\n\nBaşka bir model yüklemek için önce mevcut modeli kaldırmalısınız.')) {
+  const unloadFromGPU = async (modelPath?: string) => {
+    if (!confirm(modelPath ? `Bu modeli GPU'dan kaldırmak istediğinize emin misiniz?` : 'TÜM modelleri GPU\'dan kaldırmak istediğinize emin misiniz?')) {
       return;
     }
-    
+
     try {
-      console.log('🔄 Model GPU\'dan kaldırılıyor...');
-      
+      console.log('🔄 Model(ler) GPU\'dan kaldırılıyor...');
+
       const { unloadGgufModel } = await import('../services/ggufProvider');
-      await unloadGgufModel();
-      
+      await unloadGgufModel(); // TODO: Backend'de spesifik model unload eklenebilir, şimdilik hepsi
+
       // localStorage'dan aktif model config'ini temizle
-      localStorage.removeItem('gguf-active-model');
-      
-      // Aktif GPU modelini temizle
-      setActiveGpuModel(null);
-      
-      // AI Settings'de GGUF modellerini pasif yap
+      if (!modelPath) {
+        localStorage.removeItem('gguf-active-model');
+        setActiveGpuModel(null);
+      }
+
+      // AI Settings'de GGUF modellerini güncelle
       const savedProviders = localStorage.getItem('corex-ai-providers');
       if (savedProviders) {
         try {
           const providers = JSON.parse(savedProviders);
           const ggufProvider = providers.find((p: any) => p.id === 'gguf-direct');
-          
+
           if (ggufProvider) {
-            // Tüm GGUF modellerini pasif yap
-            ggufProvider.models = ggufProvider.models.map((m: any) => ({ ...m, isActive: false }));
-            ggufProvider.isActive = false;
-            
+            if (modelPath) {
+              // Sadece spesifik modeli pasif yap
+              ggufProvider.models = ggufProvider.models.map((m: any) =>
+                m.localPath === modelPath ? { ...m, isActive: false } : m
+              );
+            } else {
+              // Tüm GGUF modellerini pasif yap
+              ggufProvider.models = ggufProvider.models.map((m: any) => ({ ...m, isActive: false }));
+              ggufProvider.isActive = false;
+            }
+
             localStorage.setItem('corex-ai-providers', JSON.stringify(providers));
-            
+
             // Provider güncelleme eventi gönder
-            window.dispatchEvent(new CustomEvent('ai-providers-updated', { 
-              detail: providers 
+            window.dispatchEvent(new CustomEvent('ai-providers-updated', {
+              detail: providers
             }));
           }
         } catch (error) {
           console.error('❌ AI Settings güncelleme hatası:', error);
         }
       }
-      
-      console.log('✅ Model GPU\'dan kaldırıldı');
-      showToast('Model GPU\'dan başarıyla kaldırıldı!', 'success');
-      
+
+      console.log('✅ Model(ler) GPU\'dan kaldırıldı');
+      showToast('Model(ler) GPU\'dan başarıyla kaldırıldı!', 'success');
+
     } catch (error) {
       console.error('❌ GPU unload hatası:', error);
       showToast(`Model kaldırma hatası: ${error}`, 'error');
@@ -1196,35 +1231,18 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
   const filteredModels = models
     .filter(model => {
-      // Arama filtresi
+      // Arama filtresi - TÜM modeller gösterilir
       const matchesSearch = model.displayName.toLowerCase().includes(searchQuery.toLowerCase()) ||
         model.description.toLowerCase().includes(searchQuery.toLowerCase());
-      
+
       // Kategori filtresi
       if (filterBy === 'favorites' && !model.isFavorite) return false;
       if (filterBy === 'downloaded' && !model.isDownloaded) return false;
-      
-      // 🆕 Boyut filtresi
-      if (sizeFilter !== 'all') {
-        const sizeGB = model.sizeBytes / (1024 ** 3);
-        if (sizeFilter === 'small' && sizeGB >= 5) return false;
-        if (sizeFilter === 'medium' && (sizeGB < 5 || sizeGB >= 10)) return false;
-        if (sizeFilter === 'large' && sizeGB < 10) return false;
-      }
-      
-      // 🆕 Quantization filtresi
-      if (quantFilter !== 'all') {
-        if (!model.quantization.includes(quantFilter)) return false;
-      }
-      
-      // 🆕 Parametre filtresi
-      if (paramFilter !== 'all' && model.parameters) {
-        const params = model.parameters.toUpperCase();
-        if (paramFilter === '3B' && !params.includes('3B')) return false;
-        if (paramFilter === '7B' && !params.includes('7B') && !params.includes('8B')) return false;
-        if (paramFilter === '13B+' && !params.match(/1[3-9]B|[2-9]\dB|\d{3,}B/)) return false;
-      }
-      
+
+      // ⚠️ BOYUT/PARAMETER KIŞITLAMALARI KALDIRILDI
+      // Kullanıcı istediği herhangi bir GGUF dosyasını indirip kullanabilir
+      // Sistem çalışıp çalışmadığını runtime'da belirler
+
       return matchesSearch;
     })
     .sort((a, b) => {
@@ -1260,45 +1278,42 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
           <input type="text" value={downloadFolder || 'Klasör seçilmedi'} readOnly className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-xs" placeholder="İndirme klasörü" />
           <button onClick={selectDownloadFolder} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs whitespace-nowrap">📁 Klasör</button>
           <button onClick={selectLocalFile} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs whitespace-nowrap">📄 Dosya Ekle</button>
-          <button 
+          <button
             onClick={() => setShowSearchModal(true)}
             className="px-3 py-1.5 bg-purple-600 hover:bg-purple-700 rounded text-xs whitespace-nowrap"
           >
             🤗 Model Ara
           </button>
-          <button 
+          <button
             onClick={() => setShowComparison(true)}
             disabled={models.filter(m => m.isDownloaded).length < 2}
-            className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${
-              models.filter(m => m.isDownloaded).length >= 2
-                ? 'bg-orange-600 hover:bg-orange-700 text-white'
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            }`}
+            className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${models.filter(m => m.isDownloaded).length >= 2
+              ? 'bg-orange-600 hover:bg-orange-700 text-white'
+              : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
             title="İki model karşılaştır"
           >
             ⚖️ Karşılaştır
           </button>
-          <button 
+          <button
             onClick={() => setShowCleanupModal(true)}
             disabled={models.length === 0}
-            className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${
-              models.length > 0
-                ? 'bg-cyan-600 hover:bg-cyan-700 text-white'
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            }`}
+            className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${models.length > 0
+              ? 'bg-cyan-600 hover:bg-cyan-700 text-white'
+              : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
             title="Model temizlik ve disk yönetimi"
           >
             🧹 Temizlik
           </button>
-          <button 
-            onClick={unloadFromGPU} 
+          <button
+            onClick={() => unloadFromGPU()}
             disabled={!activeGpuModel}
-            className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${
-              activeGpuModel 
-                ? 'bg-red-600 hover:bg-red-700 text-white' 
-                : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-            }`}
-            title={activeGpuModel ? 'GPU\'dan modeli kaldır' : 'GPU\'da model yok'}
+            className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${activeGpuModel
+              ? 'bg-red-600 hover:bg-red-700 text-white'
+              : 'bg-gray-600 text-gray-400 cursor-not-allowed'
+              }`}
+            title={activeGpuModel ? "GPU'dan model(leri) kaldır" : "GPU'da model yok"}
           >
             🎮 GPU'dan Kaldır
           </button>
@@ -1312,31 +1327,28 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <div className="flex gap-1 flex-shrink-0">
                 <button
                   onClick={() => setFilterBy('all')}
-                  className={`px-2 py-1 rounded text-xs ${
-                    filterBy === 'all'
-                      ? 'bg-blue-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                  className={`px-2 py-1 rounded text-xs ${filterBy === 'all'
+                    ? 'bg-blue-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
                 >
                   📋 Tümü ({models.length})
                 </button>
                 <button
                   onClick={() => setFilterBy('favorites')}
-                  className={`px-2 py-1 rounded text-xs ${
-                    filterBy === 'favorites'
-                      ? 'bg-yellow-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                  className={`px-2 py-1 rounded text-xs ${filterBy === 'favorites'
+                    ? 'bg-yellow-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
                 >
                   ⭐ Favoriler ({models.filter(m => m.isFavorite).length})
                 </button>
                 <button
                   onClick={() => setFilterBy('downloaded')}
-                  className={`px-2 py-1 rounded text-xs ${
-                    filterBy === 'downloaded'
-                      ? 'bg-green-600 text-white'
-                      : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
-                  }`}
+                  className={`px-2 py-1 rounded text-xs ${filterBy === 'downloaded'
+                    ? 'bg-green-600 text-white'
+                    : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
+                    }`}
                 >
                   ✓ İndirilmiş ({models.filter(m => m.isDownloaded).length})
                 </button>
@@ -1431,11 +1443,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <p className="text-xs mt-1">veya 🤗 Hugging Face'den model arayın</p>
             </div>
           )}
-          
+
           {filteredModels.map(model => {
             const requirements = calculateRequirements(model, contextLength);
             const quantInfo = QUANT_INFO[model.quantization];
-            
+
             return (
               <div key={model.id} className={`p-2 rounded border text-xs ${model.isDownloaded ? 'border-green-500 bg-green-900/10' : 'border-gray-600 bg-gray-800/50'} hover:border-blue-500 transition-colors`}>
                 <div className="flex items-start justify-between gap-2">
@@ -1471,7 +1483,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                         </span>
                       )}
                     </div>
-                    
+
                     {/* İndirme Progress Bar */}
                     {model.isDownloading && (
                       <div className="mt-2 space-y-1">
@@ -1482,7 +1494,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                           </span>
                         </div>
                         <div className="w-full bg-gray-700 rounded-full h-2 overflow-hidden">
-                          <div 
+                          <div
                             className="bg-blue-500 h-full transition-all duration-300 ease-out"
                             style={{ width: `${model.downloadProgress || 0}%` }}
                           />
@@ -1499,21 +1511,21 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                               if (model.downloadProgress >= 100) {
                                 return 'Tamamlandı!';
                               }
-                              
+
                               // Gerçek indirme hızını hesapla
                               const elapsedSeconds = (Date.now() - (model.downloadStartTime || Date.now())) / 1000;
                               const downloadedBytes = model.downloadedBytes || 0;
                               const totalBytes = model.sizeBytes;
                               const remainingBytes = totalBytes - downloadedBytes;
-                              
+
                               if (elapsedSeconds < 2) {
                                 return 'Hesaplanıyor...';
                               }
-                              
+
                               const bytesPerSecond = downloadedBytes / elapsedSeconds;
                               const speedMBps = (bytesPerSecond / (1024 * 1024)).toFixed(1);
                               const remainingSeconds = Math.ceil(remainingBytes / bytesPerSecond);
-                              
+
                               let timeStr = '';
                               if (remainingSeconds < 60) {
                                 timeStr = `${remainingSeconds} sn`;
@@ -1522,14 +1534,14 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                               } else {
                                 timeStr = `${(remainingSeconds / 3600).toFixed(1)} saat`;
                               }
-                              
+
                               return `${speedMBps} MB/s • ~${timeStr}`;
                             })()}
                           </span>
                         </div>
                       </div>
                     )}
-                    
+
                     {showRequirements === model.id && model.sizeBytes > 0 && (
                       <div className="mt-2 p-2 bg-gray-900 rounded text-xs space-y-1">
                         <div className="flex justify-between"><span>💾 Min RAM:</span><span className="font-semibold">{requirements.minRAM} GB</span></div>
@@ -1548,19 +1560,18 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                     {model.isDownloaded && (
                       <>
                         <button onClick={() => handleModelSelect(model)} className="px-2 py-1 bg-green-600 hover:bg-green-700 rounded text-xs whitespace-nowrap" title="Ayarla ve Kullan">⚙️</button>
-                        <button 
-                          onClick={() => runBenchmark(model)} 
+                        <button
+                          onClick={() => runBenchmark(model)}
                           disabled={isBenchmarking}
-                          className={`px-2 py-1 rounded text-xs whitespace-nowrap ${
-                            isBenchmarking 
-                              ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                              : 'bg-yellow-600 hover:bg-yellow-700 text-white'
-                          }`}
+                          className={`px-2 py-1 rounded text-xs whitespace-nowrap ${isBenchmarking
+                            ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
+                            : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                            }`}
                           title="Hız testi yap"
                         >
                           {isBenchmarking ? '⏳' : '⚡'}
                         </button>
-                        <button 
+                        <button
                           onClick={() => {
                             setSelectedModelForConfig(model);
                             readModelMetadata(model.localPath!);
@@ -1573,8 +1584,8 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                       </>
                     )}
                     {!model.isDownloaded && !model.isDownloading && (
-                      <button 
-                        onClick={() => addToDownloadQueue(model)} 
+                      <button
+                        onClick={() => addToDownloadQueue(model)}
                         className="px-2 py-1 bg-orange-600 hover:bg-orange-700 rounded text-xs whitespace-nowrap"
                         title="Kuyruğa ekle"
                       >
@@ -1638,41 +1649,37 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
           <div className="mb-1.5 flex gap-0 border-b border-gray-700">
             <button
               onClick={() => setActiveTab('basic')}
-              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'basic'
-                  ? 'text-blue-400 border-b-2 border-blue-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'basic'
+                ? 'text-blue-400 border-b-2 border-blue-400'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               🎯 Temel
             </button>
             <button
               onClick={() => setActiveTab('advanced')}
-              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'advanced'
-                  ? 'text-purple-400 border-b-2 border-purple-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'advanced'
+                ? 'text-purple-400 border-b-2 border-purple-400'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               🔬 Gelişmiş
             </button>
             <button
               onClick={() => setActiveTab('logs')}
-              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'logs'
-                  ? 'text-yellow-400 border-b-2 border-yellow-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'logs'
+                ? 'text-yellow-400 border-b-2 border-yellow-400'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               📈 Loglar
             </button>
             <button
               onClick={() => setActiveTab('history')}
-              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${
-                activeTab === 'history'
-                  ? 'text-pink-400 border-b-2 border-pink-400'
-                  : 'text-gray-400 hover:text-white'
-              }`}
+              className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'history'
+                ? 'text-pink-400 border-b-2 border-pink-400'
+                : 'text-gray-400 hover:text-white'
+                }`}
             >
               💬 Geçmiş
             </button>
@@ -1687,19 +1694,18 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   {gpuMemory.used_vram_gb.toFixed(1)} / {gpuMemory.total_vram_gb.toFixed(1)} GB
                 </span>
               </div>
-              
+
               {/* Progress Bar */}
               <div className="w-full bg-gray-700 rounded-full h-1.5 mb-1.5 overflow-hidden">
-                <div 
-                  className={`h-full transition-all duration-300 ${
-                    gpuMemory.usage_percent > 90 ? 'bg-red-500' :
+                <div
+                  className={`h-full transition-all duration-300 ${gpuMemory.usage_percent > 90 ? 'bg-red-500' :
                     gpuMemory.usage_percent > 75 ? 'bg-yellow-500' :
-                    'bg-green-500'
-                  }`}
+                      'bg-green-500'
+                    }`}
                   style={{ width: `${Math.min(gpuMemory.usage_percent, 100)}%` }}
                 />
               </div>
-              
+
               {/* Detaylar */}
               <div className="space-y-0.5 text-xs">
                 <div className="flex justify-between text-gray-400">
@@ -1725,344 +1731,338 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
           {/* 🎯 Temel Ayarlar Sekmesi */}
           {activeTab === 'basic' && (
             <div className="space-y-2">
-            {/* Context Length - Preset Butonlar */}
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-white">
-                📝 Bağlam Uzunluğu
-              </label>
-              <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs text-gray-400">Seçili:</span>
-                <span className="text-xs font-semibold text-white">{contextLength.toLocaleString()}</span>
-              </div>
-              
-              {/* Preset Butonlar */}
-              <div className="grid grid-cols-3 gap-1.5 mb-1.5">
-                {[
-                  { value: 4096, label: '4K', desc: '⚡ Hızlı' },
-                  { value: 8192, label: '8K', desc: '✅ Standart' },
-                  { value: 16384, label: '16K', desc: '📚 Uzun' },
-                  { value: 32768, label: '32K', desc: '🔥 Çok Uzun' },
-                  { value: 65536, label: '64K', desc: '💪 Maksimum' },
-                  { value: 131072, label: '128K', desc: '🚀 Ultra' }
-                ].map((preset) => (
-                  <button
-                    key={preset.value}
-                    onClick={() => setContextLength(preset.value)}
-                    className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${
-                      contextLength === preset.value
+              {/* Context Length - Preset Butonlar */}
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-white">
+                  📝 Bağlam Uzunluğu
+                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-xs text-gray-400">Seçili:</span>
+                  <span className="text-xs font-semibold text-white">{contextLength.toLocaleString()}</span>
+                </div>
+
+                {/* Preset Butonlar */}
+                <div className="grid grid-cols-3 gap-1.5 mb-1.5">
+                  {[
+                    { value: 4096, label: '4K', desc: '⚡ Hızlı' },
+                    { value: 8192, label: '8K', desc: '✅ Standart' },
+                    { value: 16384, label: '16K', desc: '📚 Uzun' },
+                    { value: 32768, label: '32K', desc: '🔥 Çok Uzun' },
+                    { value: 65536, label: '64K', desc: '💪 Maksimum' },
+                    { value: 131072, label: '128K', desc: '🚀 Ultra' }
+                  ].map((preset) => (
+                    <button
+                      key={preset.value}
+                      onClick={() => setContextLength(preset.value)}
+                      className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${contextLength === preset.value
                         ? 'bg-blue-600 text-white border-2 border-blue-400'
                         : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                    }`}
-                  >
-                    <div className="font-bold text-xs">{preset.label}</div>
-                    <div className="text-xs opacity-75 leading-tight">{preset.desc}</div>
-                  </button>
-                ))}
-              </div>
-              
-              <p className="text-xs text-gray-500 mt-1 leading-tight">
-                {contextLength < 8192 && '⚡ Hızlı başlatma'}
-                {contextLength >= 8192 && contextLength < 32768 && '✅ Dengeli performans'}
-                {contextLength >= 32768 && contextLength < 65536 && '📚 Uzun konuşmalar'}
-                {contextLength >= 65536 && '🚀 Maksimum bağlam'}
-              </p>
-            </div>
+                        }`}
+                    >
+                      <div className="font-bold text-xs">{preset.label}</div>
+                      <div className="text-xs opacity-75 leading-tight">{preset.desc}</div>
+                    </button>
+                  ))}
+                </div>
 
-            {/* 🆕 Output Mode - Cevap Uzunluğu */}
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-white">
-                📤 Cevap Uzunluğu (Output)
-              </label>
-              <div className="grid grid-cols-3 gap-1.5">
-                {[
-                  { value: 'brief', label: 'Kısa', tokens: '2K', desc: '⚡ Hızlı cevap', color: 'green' },
-                  { value: 'normal', label: 'Normal', tokens: '8K', desc: '✅ Dengeli', color: 'blue' },
-                  { value: 'detailed', label: 'Detaylı', tokens: '16K', desc: '📚 Uzun', color: 'purple' }
-                ].map((mode) => (
-                  <button
-                    key={mode.value}
-                    onClick={() => setOutputMode(mode.value as any)}
-                    className={`px-2 py-2 rounded text-xs font-medium transition-all ${
-                      outputMode === mode.value
+                <p className="text-xs text-gray-500 mt-1 leading-tight">
+                  {contextLength < 8192 && '⚡ Hızlı başlatma'}
+                  {contextLength >= 8192 && contextLength < 32768 && '✅ Dengeli performans'}
+                  {contextLength >= 32768 && contextLength < 65536 && '📚 Uzun konuşmalar'}
+                  {contextLength >= 65536 && '🚀 Maksimum bağlam'}
+                </p>
+              </div>
+
+              {/* 🆕 Output Mode - Cevap Uzunluğu */}
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-white">
+                  📤 Cevap Uzunluğu (Output)
+                </label>
+                <div className="grid grid-cols-3 gap-1.5">
+                  {[
+                    { value: 'brief', label: 'Kısa', tokens: '2K', desc: '⚡ Hızlı cevap', color: 'green' },
+                    { value: 'normal', label: 'Normal', tokens: '8K', desc: '✅ Dengeli', color: 'blue' },
+                    { value: 'detailed', label: 'Detaylı', tokens: '16K', desc: '📚 Uzun', color: 'purple' }
+                  ].map((mode) => (
+                    <button
+                      key={mode.value}
+                      onClick={() => setOutputMode(mode.value as any)}
+                      className={`px-2 py-2 rounded text-xs font-medium transition-all ${outputMode === mode.value
                         ? `bg-${mode.color}-600 text-white border-2 border-${mode.color}-400`
                         : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
-                    }`}
-                  >
-                    <div className="font-bold">{mode.label}</div>
-                    <div className="text-xs opacity-75">{mode.tokens}</div>
-                    <div className="text-xs opacity-75 leading-tight">{mode.desc}</div>
-                  </button>
-                ))}
-              </div>
-              <p className="text-xs text-gray-500 mt-1 leading-tight">
-                {outputMode === 'brief' && '⚡ Kısa ve öz cevaplar (2048 token)'}
-                {outputMode === 'normal' && '✅ Normal uzunlukta cevaplar (8192 token)'}
-                {outputMode === 'detailed' && '📚 Detaylı ve kapsamlı cevaplar (16384 token)'}
-              </p>
-              <div className="mt-1.5 p-2 bg-blue-900/20 border border-blue-500/30 rounded">
-                <p className="text-xs text-blue-300">
-                  💡 <strong>Context (INPUT):</strong> {(contextLength/1024).toFixed(0)}K - Modele gönderebileceğiniz maksimum prompt uzunluğu
-                </p>
-                <p className="text-xs text-blue-300 mt-0.5">
-                  💡 <strong>Output:</strong> {outputMode === 'brief' ? '2K' : outputMode === 'detailed' ? '16K' : '8K'} - AI'nın üretebileceği maksimum cevap uzunluğu
-                </p>
-              </div>
-            </div>
-
-            {/* 🆕 GPU Backend Info Panel */}
-            {gpuBackendInfo && (
-              <div className="p-3 bg-gradient-to-br from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-lg">
-                <div className="flex items-center justify-between mb-2">
-                  <h4 className="text-sm font-semibold text-white flex items-center gap-2">
-                    ⚡ GPU Hızlandırma
-                  </h4>
-                  <span className={`text-xs px-2 py-0.5 rounded ${
-                    gpuBackendInfo.backend === 'CUDA' ? 'bg-green-500/20 text-green-400' :
-                    gpuBackendInfo.backend === 'Vulkan' ? 'bg-blue-500/20 text-blue-400' :
-                    'bg-gray-500/20 text-gray-400'
-                  }`}>
-                    {gpuBackendInfo.backend}
-                  </span>
-                </div>
-                
-                <div className="space-y-2 text-xs">
-                  <div className="flex items-start gap-2">
-                    <span className="text-gray-400">Backend:</span>
-                    <span className="text-white flex-1">{gpuBackendInfo.message}</span>
-                  </div>
-                  
-                  {gpuBackendInfo.backend === 'CUDA' && (
-                    <div className="mt-3 p-2 bg-yellow-900/20 border border-yellow-500/30 rounded">
-                      <div className="flex items-start gap-2 mb-2">
-                        <span className="text-lg">ℹ️</span>
-                        <div className="flex-1">
-                          <p className="text-yellow-400 font-medium mb-1">CUDA Toolkit Gerekli</p>
-                          <p className="text-gray-300 text-xs leading-relaxed">
-                            Bu uygulama NVIDIA GPU'nuzda maksimum hız için CUDA kullanır. 
-                            CUDA Toolkit yüklü değilse, GPU hızlandırması çalışmayacaktır.
-                          </p>
-                        </div>
-                      </div>
-                      
-                      <button
-                        onClick={async () => {
-                          try {
-                            await openUrl(gpuBackendInfo.cuda_download_url);
-                            showToast('🌐 CUDA Toolkit indirme sayfası açılıyor...', 'info');
-                          } catch (error) {
-                            console.error('URL açma hatası:', error);
-                            showToast('❌ Link açılamadı', 'error');
-                          }
-                        }}
-                        className="flex items-center justify-center gap-2 w-full mt-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors cursor-pointer"
-                      >
-                        <span>📥</span>
-                        <span className="font-medium">CUDA Toolkit İndir</span>
-                        <span className="text-xs opacity-75">(~3 GB)</span>
-                      </button>
-                      
-                      <p className="text-xs text-gray-400 mt-2 text-center">
-                        Kurulumdan sonra uygulamayı yeniden başlatın
-                      </p>
-                    </div>
-                  )}
-                  
-                  {gpuBackendInfo.backend === 'CPU' && (
-                    <div className="mt-2 p-2 bg-gray-800/50 border border-gray-600/30 rounded">
-                      <p className="text-gray-400 text-xs">
-                        💡 GPU hızlandırması için CUDA veya Vulkan desteği gereklidir.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-            )}
-            
-            {/* 🆕 Model Registry - GPU Info & Backend Recommendation */}
-            {gpuInfo && gpuInfo.available && (
-              <div className="p-2 bg-gradient-to-br from-cyan-900/30 to-teal-900/30 border border-cyan-500/30 rounded-lg">
-                <div className="flex items-center justify-between mb-1.5">
-                  <h4 className="text-xs font-semibold text-cyan-400">🎮 GPU Bilgileri</h4>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${
-                    gpuInfo.vendor === 'nvidia' ? 'bg-green-500/20 text-green-400' :
-                    gpuInfo.vendor === 'amd' ? 'bg-red-500/20 text-red-400' :
-                    gpuInfo.vendor === 'intel' ? 'bg-blue-500/20 text-blue-400' :
-                    'bg-gray-500/20 text-gray-400'
-                  }`}>
-                    {gpuInfo.vendor.toUpperCase()}
-                  </span>
-                </div>
-                
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Model:</span>
-                    <span className="text-white font-medium truncate ml-2">{gpuInfo.name}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">VRAM:</span>
-                    <span className="text-white font-semibold">{gpuInfo.totalVRAM_GB.toFixed(1)} GB</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Boş VRAM:</span>
-                    <span className="text-green-400 font-semibold">{gpuInfo.freeVRAM_GB.toFixed(1)} GB</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Önerilen Backend:</span>
-                    <span className="text-cyan-400 font-semibold">{gpuInfo.recommendedBackend.toUpperCase()}</span>
-                  </div>
-                </div>
-              </div>
-            )}
-            
-            {/* 🆕 Model Registry - Backend Recommendation for Selected Model */}
-            {backendRecommendation && (
-              <div className={`p-2 rounded-lg border ${
-                backendRecommendation.expectedPerformance === 'excellent' ? 'bg-green-900/20 border-green-500/30' :
-                backendRecommendation.expectedPerformance === 'good' ? 'bg-blue-900/20 border-blue-500/30' :
-                backendRecommendation.expectedPerformance === 'moderate' ? 'bg-yellow-900/20 border-yellow-500/30' :
-                'bg-red-900/20 border-red-500/30'
-              }`}>
-                <div className="flex items-center justify-between mb-1.5">
-                  <h4 className="text-xs font-semibold text-white">🎯 Bu Model İçin Öneri</h4>
-                  <span className={`text-xs px-1.5 py-0.5 rounded ${
-                    backendRecommendation.expectedPerformance === 'excellent' ? 'bg-green-500/20 text-green-400' :
-                    backendRecommendation.expectedPerformance === 'good' ? 'bg-blue-500/20 text-blue-400' :
-                    backendRecommendation.expectedPerformance === 'moderate' ? 'bg-yellow-500/20 text-yellow-400' :
-                    'bg-red-500/20 text-red-400'
-                  }`}>
-                    {backendRecommendation.expectedPerformance === 'excellent' ? '⚡ Mükemmel' :
-                     backendRecommendation.expectedPerformance === 'good' ? '✅ İyi' :
-                     backendRecommendation.expectedPerformance === 'moderate' ? '⚠️ Orta' :
-                     '🐌 Yavaş'}
-                  </span>
-                </div>
-                
-                <div className="space-y-1 text-xs">
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">Backend:</span>
-                    <span className="text-white font-semibold">{backendRecommendation.backend.toUpperCase()}</span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-400">GPU Layers:</span>
-                    <span className="text-white font-semibold">{backendRecommendation.gpuLayers}/33</span>
-                  </div>
-                  <p className="text-gray-300 mt-1.5 leading-relaxed">{backendRecommendation.reason}</p>
-                  
-                  {backendRecommendation.warnings.length > 0 && (
-                    <div className="mt-2 space-y-1">
-                      {backendRecommendation.warnings.map((warning, index) => (
-                        <p key={index} className="text-yellow-400 text-xs leading-relaxed">
-                          {warning}
-                        </p>
-                      ))}
-                    </div>
-                  )}
-                  
-                  {backendRecommendation.gpuLayers > 0 && backendRecommendation.gpuLayers !== gpuLayers && (
-                    <button
-                      onClick={() => setGpuLayers(backendRecommendation.gpuLayers)}
-                      className="w-full mt-2 px-2 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-xs transition-colors"
+                        }`}
                     >
-                      ✨ Önerilen Ayarı Uygula ({backendRecommendation.gpuLayers} layer)
+                      <div className="font-bold">{mode.label}</div>
+                      <div className="text-xs opacity-75">{mode.tokens}</div>
+                      <div className="text-xs opacity-75 leading-tight">{mode.desc}</div>
                     </button>
+                  ))}
+                </div>
+                <p className="text-xs text-gray-500 mt-1 leading-tight">
+                  {outputMode === 'brief' && '⚡ Kısa ve öz cevaplar (2048 token)'}
+                  {outputMode === 'normal' && '✅ Normal uzunlukta cevaplar (8192 token)'}
+                  {outputMode === 'detailed' && '📚 Detaylı ve kapsamlı cevaplar (16384 token)'}
+                </p>
+                <div className="mt-1.5 p-2 bg-blue-900/20 border border-blue-500/30 rounded">
+                  <p className="text-xs text-blue-300">
+                    💡 <strong>Context (INPUT):</strong> {(contextLength / 1024).toFixed(0)}K - Modele gönderebileceğiniz maksimum prompt uzunluğu
+                  </p>
+                  <p className="text-xs text-blue-300 mt-0.5">
+                    💡 <strong>Output:</strong> {outputMode === 'brief' ? '2K' : outputMode === 'detailed' ? '16K' : '8K'} - AI'nın üretebileceği maksimum cevap uzunluğu
+                  </p>
+                </div>
+              </div>
+
+              {/* 🆕 GPU Backend Info Panel */}
+              {gpuBackendInfo && (
+                <div className="p-3 bg-gradient-to-br from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-lg">
+                  <div className="flex items-center justify-between mb-2">
+                    <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                      ⚡ GPU Hızlandırma
+                    </h4>
+                    <span className={`text-xs px-2 py-0.5 rounded ${gpuBackendInfo.backend === 'CUDA' ? 'bg-green-500/20 text-green-400' :
+                      gpuBackendInfo.backend === 'Vulkan' ? 'bg-blue-500/20 text-blue-400' :
+                        'bg-gray-500/20 text-gray-400'
+                      }`}>
+                      {gpuBackendInfo.backend}
+                    </span>
+                  </div>
+
+                  <div className="space-y-2 text-xs">
+                    <div className="flex items-start gap-2">
+                      <span className="text-gray-400">Backend:</span>
+                      <span className="text-white flex-1">{gpuBackendInfo.message}</span>
+                    </div>
+
+                    {gpuBackendInfo.backend === 'CUDA' && (
+                      <div className="mt-3 p-2 bg-yellow-900/20 border border-yellow-500/30 rounded">
+                        <div className="flex items-start gap-2 mb-2">
+                          <span className="text-lg">ℹ️</span>
+                          <div className="flex-1">
+                            <p className="text-yellow-400 font-medium mb-1">CUDA Toolkit Gerekli</p>
+                            <p className="text-gray-300 text-xs leading-relaxed">
+                              Bu uygulama NVIDIA GPU'nuzda maksimum hız için CUDA kullanır.
+                              CUDA Toolkit yüklü değilse, GPU hızlandırması çalışmayacaktır.
+                            </p>
+                          </div>
+                        </div>
+
+                        <button
+                          onClick={async () => {
+                            try {
+                              await openUrl(gpuBackendInfo.cuda_download_url);
+                              showToast('🌐 CUDA Toolkit indirme sayfası açılıyor...', 'info');
+                            } catch (error) {
+                              console.error('URL açma hatası:', error);
+                              showToast('❌ Link açılamadı', 'error');
+                            }
+                          }}
+                          className="flex items-center justify-center gap-2 w-full mt-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors cursor-pointer"
+                        >
+                          <span>📥</span>
+                          <span className="font-medium">CUDA Toolkit İndir</span>
+                          <span className="text-xs opacity-75">(~3 GB)</span>
+                        </button>
+
+                        <p className="text-xs text-gray-400 mt-2 text-center">
+                          Kurulumdan sonra uygulamayı yeniden başlatın
+                        </p>
+                      </div>
+                    )}
+
+                    {gpuBackendInfo.backend === 'CPU' && (
+                      <div className="mt-2 p-2 bg-gray-800/50 border border-gray-600/30 rounded">
+                        <p className="text-gray-400 text-xs">
+                          💡 GPU hızlandırması için CUDA veya Vulkan desteği gereklidir.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* 🆕 Model Registry - GPU Info & Backend Recommendation */}
+              {gpuInfo && gpuInfo.available && (
+                <div className="p-2 bg-gradient-to-br from-cyan-900/30 to-teal-900/30 border border-cyan-500/30 rounded-lg">
+                  <div className="flex items-center justify-between mb-1.5">
+                    <h4 className="text-xs font-semibold text-cyan-400">🎮 GPU Bilgileri</h4>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${gpuInfo.vendor === 'nvidia' ? 'bg-green-500/20 text-green-400' :
+                      gpuInfo.vendor === 'amd' ? 'bg-red-500/20 text-red-400' :
+                        gpuInfo.vendor === 'intel' ? 'bg-blue-500/20 text-blue-400' :
+                          'bg-gray-500/20 text-gray-400'
+                      }`}>
+                      {gpuInfo.vendor.toUpperCase()}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Model:</span>
+                      <span className="text-white font-medium truncate ml-2">{gpuInfo.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">VRAM:</span>
+                      <span className="text-white font-semibold">{gpuInfo.totalVRAM_GB.toFixed(1)} GB</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Boş VRAM:</span>
+                      <span className="text-green-400 font-semibold">{gpuInfo.freeVRAM_GB.toFixed(1)} GB</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Önerilen Backend:</span>
+                      <span className="text-cyan-400 font-semibold">{gpuInfo.recommendedBackend.toUpperCase()}</span>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* 🆕 Model Registry - Backend Recommendation for Selected Model */}
+              {backendRecommendation && (
+                <div className={`p-2 rounded-lg border ${backendRecommendation.expectedPerformance === 'excellent' ? 'bg-green-900/20 border-green-500/30' :
+                  backendRecommendation.expectedPerformance === 'good' ? 'bg-blue-900/20 border-blue-500/30' :
+                    backendRecommendation.expectedPerformance === 'moderate' ? 'bg-yellow-900/20 border-yellow-500/30' :
+                      'bg-red-900/20 border-red-500/30'
+                  }`}>
+                  <div className="flex items-center justify-between mb-1.5">
+                    <h4 className="text-xs font-semibold text-white">🎯 Bu Model İçin Öneri</h4>
+                    <span className={`text-xs px-1.5 py-0.5 rounded ${backendRecommendation.expectedPerformance === 'excellent' ? 'bg-green-500/20 text-green-400' :
+                      backendRecommendation.expectedPerformance === 'good' ? 'bg-blue-500/20 text-blue-400' :
+                        backendRecommendation.expectedPerformance === 'moderate' ? 'bg-yellow-500/20 text-yellow-400' :
+                          'bg-red-500/20 text-red-400'
+                      }`}>
+                      {backendRecommendation.expectedPerformance === 'excellent' ? '⚡ Mükemmel' :
+                        backendRecommendation.expectedPerformance === 'good' ? '✅ İyi' :
+                          backendRecommendation.expectedPerformance === 'moderate' ? '⚠️ Orta' :
+                            '🐌 Yavaş'}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1 text-xs">
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">Backend:</span>
+                      <span className="text-white font-semibold">{backendRecommendation.backend.toUpperCase()}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-gray-400">GPU Layers:</span>
+                      <span className="text-white font-semibold">{backendRecommendation.gpuLayers}/33</span>
+                    </div>
+                    <p className="text-gray-300 mt-1.5 leading-relaxed">{backendRecommendation.reason}</p>
+
+                    {backendRecommendation.warnings.length > 0 && (
+                      <div className="mt-2 space-y-1">
+                        {backendRecommendation.warnings.map((warning, index) => (
+                          <p key={index} className="text-yellow-400 text-xs leading-relaxed">
+                            {warning}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+
+                    {backendRecommendation.gpuLayers > 0 && backendRecommendation.gpuLayers !== gpuLayers && (
+                      <button
+                        onClick={() => setGpuLayers(backendRecommendation.gpuLayers)}
+                        className="w-full mt-2 px-2 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-xs transition-colors"
+                      >
+                        ✨ Önerilen Ayarı Uygula ({backendRecommendation.gpuLayers} layer)
+                      </button>
+                    )}
+                  </div>
+                </div>
+              )}
+
+              {/* GPU Layers */}
+              <div>
+                <label className="block text-xs font-medium mb-1.5 text-white">
+                  🎮 GPU Offload
+                </label>
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs text-gray-400">Layers</span>
+                  <span className="text-xs font-semibold text-white">{gpuLayers}</span>
+                </div>
+                <input
+                  type="range"
+                  min="0"
+                  max="40"
+                  step="1"
+                  value={gpuLayers}
+                  onChange={(e) => setGpuLayers(parseInt(e.target.value))}
+                  className="w-full"
+                />
+                <div className="flex justify-between text-xs text-gray-500 mt-0.5">
+                  <span>CPU</span>
+                  <span>Hibrit</span>
+                  <span>GPU</span>
+                </div>
+                <p className="text-xs text-gray-500 mt-1 leading-tight">
+                  {gpuLayers === 0 && '🖥️ Sadece CPU'}
+                  {gpuLayers > 0 && gpuLayers < 20 && '⚡ CPU + GPU'}
+                  {gpuLayers >= 20 && '🚀 Çoğunlukla GPU'}
+                </p>
+              </div>
+
+              {/* Sistem Gereksinimleri */}
+              {selectedModelForConfig.sizeBytes > 0 && (
+                <div className="p-2 bg-gray-900 rounded text-xs space-y-0.5">
+                  <div className="font-medium text-white mb-1">📊 Gereksinimler</div>
+                  {(() => {
+                    const req = calculateRequirements(selectedModelForConfig, contextLength);
+                    return (
+                      <>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">💾 RAM:</span>
+                          <span className="text-white">{req.recommendedRAM} GB</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span className="text-gray-400">🎮 VRAM:</span>
+                          <span className="text-white">{req.recommendedVRAM} GB</span>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* 🆕 GPU Yükleme Progress Bar */}
+              {isLoadingToGPU && (
+                <div className="mt-3 p-2.5 bg-blue-900/30 border border-blue-500/30 rounded">
+                  <div className="flex items-center gap-2 mb-1.5">
+                    <div className="animate-spin text-sm">🔄</div>
+                    <span className="text-blue-400 font-medium text-xs">GPU'ya yükleniyor...</span>
+                  </div>
+                  <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-blue-500 h-full transition-all duration-300 ease-out"
+                      style={{ width: `${Math.round(loadingProgress)}%` }}
+                    />
+                  </div>
+                  <div className="text-xs text-gray-400 mt-1 text-right">{Math.round(loadingProgress)}%</div>
+                  {loadingProgress > 90 && (
+                    <div className="text-xs text-yellow-400 mt-1 leading-tight">
+                      ⏳ Model hazırlanıyor...
+                    </div>
                   )}
                 </div>
-              </div>
-            )}
+              )}
 
-            {/* GPU Layers */}
-            <div>
-              <label className="block text-xs font-medium mb-1.5 text-white">
-                🎮 GPU Offload
-              </label>
-              <div className="flex items-center justify-between mb-1">
-                <span className="text-xs text-gray-400">Layers</span>
-                <span className="text-xs font-semibold text-white">{gpuLayers}</span>
-              </div>
-              <input
-                type="range"
-                min="0"
-                max="40"
-                step="1"
-                value={gpuLayers}
-                onChange={(e) => setGpuLayers(parseInt(e.target.value))}
-                className="w-full"
-              />
-              <div className="flex justify-between text-xs text-gray-500 mt-0.5">
-                <span>CPU</span>
-                <span>Hibrit</span>
-                <span>GPU</span>
-              </div>
-              <p className="text-xs text-gray-500 mt-1 leading-tight">
-                {gpuLayers === 0 && '🖥️ Sadece CPU'}
-                {gpuLayers > 0 && gpuLayers < 20 && '⚡ CPU + GPU'}
-                {gpuLayers >= 20 && '🚀 Çoğunlukla GPU'}
-              </p>
-            </div>
-
-            {/* Sistem Gereksinimleri */}
-            {selectedModelForConfig.sizeBytes > 0 && (
-              <div className="p-2 bg-gray-900 rounded text-xs space-y-0.5">
-                <div className="font-medium text-white mb-1">📊 Gereksinimler</div>
-                {(() => {
-                  const req = calculateRequirements(selectedModelForConfig, contextLength);
-                  return (
-                    <>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">💾 RAM:</span>
-                        <span className="text-white">{req.recommendedRAM} GB</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span className="text-gray-400">🎮 VRAM:</span>
-                        <span className="text-white">{req.recommendedVRAM} GB</span>
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-            )}
-
-            {/* 🆕 GPU Yükleme Progress Bar */}
-            {isLoadingToGPU && (
-              <div className="mt-3 p-2.5 bg-blue-900/30 border border-blue-500/30 rounded">
-                <div className="flex items-center gap-2 mb-1.5">
-                  <div className="animate-spin text-sm">🔄</div>
-                  <span className="text-blue-400 font-medium text-xs">GPU'ya yükleniyor...</span>
-                </div>
-                <div className="w-full bg-gray-700 rounded-full h-1.5 overflow-hidden">
-                  <div 
-                    className="bg-blue-500 h-full transition-all duration-300 ease-out"
-                    style={{ width: `${Math.round(loadingProgress)}%` }}
-                  />
-                </div>
-                <div className="text-xs text-gray-400 mt-1 text-right">{Math.round(loadingProgress)}%</div>
-                {loadingProgress > 90 && (
-                  <div className="text-xs text-yellow-400 mt-1 leading-tight">
-                    ⏳ Model hazırlanıyor...
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Uygula Butonu */}
-            <button
-              onClick={applyModelConfig}
-              disabled={isLoadingToGPU}
-              className={`w-full px-3 py-2 ${isLoadingToGPU ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded font-medium text-xs`}
-            >
-              {isLoadingToGPU ? '⏳ Yükleniyor...' : '✓ Ayarları Uygula ve Kullan'}
-            </button>
-            
-            {/* 🆕 GPU'dan Kaldır Butonu */}
-            {activeGpuModel && (
+              {/* Uygula Butonu */}
               <button
-                onClick={unloadFromGPU}
-                className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-xs"
+                onClick={applyModelConfig}
+                disabled={isLoadingToGPU}
+                className={`w-full px-3 py-2 ${isLoadingToGPU ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded font-medium text-xs`}
               >
-                🎮 GPU'dan Kaldır
+                {isLoadingToGPU ? '⏳ Yükleniyor...' : '✓ Ayarları Uygula ve Kullan'}
               </button>
-            )}
-          </div>
+
+              {/* 🆕 GPU'dan Kaldır Butonu */}
+              {activeGpuModel && (
+                <button
+                  onClick={() => unloadFromGPU()}
+                  className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-xs"
+                >
+                  🎮 GPU'dan Kaldır
+                </button>
+              )}
+            </div>
           )}
 
           {/* 🔬 Gelişmiş Ayarlar Sekmesi */}
@@ -2257,7 +2257,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {/* GPU'dan Kaldır Butonu */}
               {activeGpuModel && (
                 <button
-                  onClick={unloadFromGPU}
+                  onClick={() => unloadFromGPU()}
                   className="w-full px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-xs"
                 >
                   🎮 GPU'dan Kaldır
@@ -2284,7 +2284,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   </button>
                 )}
               </div>
-              
+
               {performanceLogs.length > 0 ? (
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
                   {performanceLogs.map((log, index) => (
@@ -2309,11 +2309,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                         <div className="flex justify-between">
                           <span>Tarih:</span>
                           <span className="text-white text-xs">
-                            {new Date(log.timestamp).toLocaleString('tr-TR', { 
-                              day: '2-digit', 
-                              month: '2-digit', 
-                              hour: '2-digit', 
-                              minute: '2-digit' 
+                            {new Date(log.timestamp).toLocaleString('tr-TR', {
+                              day: '2-digit',
+                              month: '2-digit',
+                              hour: '2-digit',
+                              minute: '2-digit'
                             })}
                           </span>
                         </div>
@@ -2351,7 +2351,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   </button>
                 )}
               </div>
-              
+
               {conversationHistory.length > 0 ? (
                 <div className="flex-1 overflow-y-auto space-y-1.5 pr-1">
                   {conversationHistory.map((entry, index) => (
@@ -2359,9 +2359,9 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                       <div className="flex items-center justify-between mb-1">
                         <span className="font-semibold text-white truncate">{entry.modelName}</span>
                         <span className="text-gray-400 text-xs">
-                          {new Date(entry.timestamp).toLocaleDateString('tr-TR', { 
-                            day: '2-digit', 
-                            month: '2-digit' 
+                          {new Date(entry.timestamp).toLocaleDateString('tr-TR', {
+                            day: '2-digit',
+                            month: '2-digit'
                           })}
                         </span>
                       </div>
@@ -2392,11 +2392,10 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
           )}
         </div>
       )}
-      
+
       {/* 🆕 Model Karşılaştırma Popup */}
       {showComparison && (
         <ModelComparison
-          models={models.filter(m => m.isDownloaded)}
           onClose={() => setShowComparison(false)}
         />
       )}
@@ -2409,14 +2408,14 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <h3 className="text-lg font-semibold text-white">🤗 Hugging Face Model Ara</h3>
               <button onClick={() => setShowSearchModal(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
             </div>
-            
+
             <div className="mb-3">
-              <input 
-                type="text" 
-                placeholder="Model ara... (örn: tinyllama, qwen, phi, llama)" 
-                value={hfSearchQuery} 
-                onChange={(e) => setHfSearchQuery(e.target.value)} 
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none" 
+              <input
+                type="text"
+                placeholder="Model ara... (örn: tinyllama, qwen, phi, llama)"
+                value={hfSearchQuery}
+                onChange={(e) => setHfSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
                 autoFocus
               />
               {isSearching && <div className="mt-2 text-sm text-gray-400">🔄 Aranıyor...</div>}
@@ -2443,22 +2442,22 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                           </div>
                         </div>
                         <div className="flex flex-col gap-1.5">
-                          <button 
+                          <button
                             onClick={() => {
                               addModelFromSearch(model);
                               setShowSearchModal(false);
-                            }} 
+                            }}
                             className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs whitespace-nowrap"
                           >
                             + Ekle ve İndir
                           </button>
-                          <button 
-                            onClick={() => addToDownloadQueue(model)} 
+                          <button
+                            onClick={() => addToDownloadQueue(model)}
                             className="px-3 py-1.5 bg-orange-600 hover:bg-orange-700 rounded text-xs whitespace-nowrap"
                           >
                             📥 Kuyruğa Ekle
                           </button>
-                          <button 
+                          <button
                             onClick={async (e) => {
                               e.stopPropagation();
                               try {
@@ -2502,16 +2501,16 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <h3 className="text-lg font-semibold text-white">🔍 Gelişmiş Filtreler ve Arama</h3>
               <button onClick={() => setShowFilterModal(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
             </div>
-            
+
             {/* İsme Göre Arama */}
             <div className="mb-4">
               <label className="block text-sm font-medium text-white mb-2">🔤 İsme Göre Ara</label>
-              <input 
-                type="text" 
-                placeholder="Model adı veya açıklama..." 
-                value={searchQuery} 
-                onChange={(e) => setSearchQuery(e.target.value)} 
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none" 
+              <input
+                type="text"
+                placeholder="Model adı veya açıklama..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
                 autoFocus
               />
             </div>
@@ -2533,57 +2532,17 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 </select>
               </div>
 
-              {/* Boyut Filtresi */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">📦 Boyut</label>
-                <select
-                  value={sizeFilter}
-                  onChange={(e) => setSizeFilter(e.target.value as any)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="all">Tümü</option>
-                  <option value="small">&lt; 5 GB</option>
-                  <option value="medium">5-10 GB</option>
-                  <option value="large">&gt; 10 GB</option>
-                </select>
-              </div>
+              {/* KALDIRILDI: Boyut Filtresi - Tüm modeleler gösterilir */}
 
-              {/* Quantization Filtresi */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">⚙️ Quantization</label>
-                <select
-                  value={quantFilter}
-                  onChange={(e) => setQuantFilter(e.target.value as any)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="all">Tümü</option>
-                  <option value="Q4">Q4 (Hızlı)</option>
-                  <option value="Q5">Q5 (Dengeli)</option>
-                  <option value="Q6">Q6 (Kaliteli)</option>
-                  <option value="Q8">Q8 (En İyi)</option>
-                </select>
-              </div>
+              {/* KALDIRILDI: Quantization Filtresi - Tüm quantization desteklenir */}
 
-              {/* Parametre Filtresi */}
-              <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1.5">🔢 Parametreler</label>
-                <select
-                  value={paramFilter}
-                  onChange={(e) => setParamFilter(e.target.value as any)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
-                >
-                  <option value="all">Tümü</option>
-                  <option value="3B">3B (Küçük)</option>
-                  <option value="7B">7-8B (Orta)</option>
-                  <option value="13B+">13B+ (Büyük)</option>
-                </select>
-              </div>
+              {/* KALDIRILDI: Parametre Filtresi - Tüm parametre boyutları desteklenir */}
             </div>
 
             {/* Sonuç Sayısı */}
-            <div className="mb-4 p-2 bg-blue-900/20 border border-blue-500/30 rounded">
-              <p className="text-sm text-blue-300">
-                📊 {filteredModels.length} model bu filtrelere uyuyor
+            <div className="mb-4 p-2 bg-green-900/20 border border-green-500/30 rounded">
+              <p className="text-sm text-green-300">
+                Tüm GGUF modelleri gösteriliyor - boyut kısıtlaması yok
               </p>
             </div>
 
@@ -2593,13 +2552,10 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 onClick={() => {
                   setSearchQuery('');
                   setSortBy('name');
-                  setSizeFilter('all');
-                  setQuantFilter('all');
-                  setParamFilter('all');
                 }}
                 className="flex-1 px-3 py-2 bg-gray-700 hover:bg-gray-600 rounded text-sm text-white"
               >
-                🔄 Tümünü Temizle
+                Temizle
               </button>
               <button
                 onClick={() => setShowFilterModal(false)}
@@ -2647,10 +2603,10 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
             {/* Temizlik Önerileri */}
             <div className="mb-2">
               <h4 className="text-xs font-semibold text-white mb-1.5">⚠️ Temizlik Önerileri</h4>
-              
+
               {(() => {
                 const suggestions = getCleanupSuggestions();
-                
+
                 if (suggestions.length === 0) {
                   return (
                     <div className="p-3 bg-green-900/20 border border-green-500/30 rounded text-center">
@@ -2659,22 +2615,20 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                     </div>
                   );
                 }
-                
+
                 return (
                   <div className="space-y-1.5">
                     {suggestions.map((suggestion, index) => (
-                      <div key={index} className={`p-1.5 rounded border ${
-                        suggestion.priority === 'high' ? 'bg-red-900/20 border-red-500/30' :
+                      <div key={index} className={`p-1.5 rounded border ${suggestion.priority === 'high' ? 'bg-red-900/20 border-red-500/30' :
                         suggestion.priority === 'medium' ? 'bg-orange-900/20 border-orange-500/30' :
-                        'bg-yellow-900/20 border-yellow-500/30'
-                      }`}>
+                          'bg-yellow-900/20 border-yellow-500/30'
+                        }`}>
                         <div className="flex items-center justify-between mb-1">
                           <div>
-                            <h5 className={`text-xs font-semibold ${
-                              suggestion.priority === 'high' ? 'text-red-400' :
+                            <h5 className={`text-xs font-semibold ${suggestion.priority === 'high' ? 'text-red-400' :
                               suggestion.priority === 'medium' ? 'text-orange-400' :
-                              'text-yellow-400'
-                            }`}>
+                                'text-yellow-400'
+                              }`}>
                               {suggestion.title} ({suggestion.models.length})
                             </h5>
                             <p className="text-xs text-gray-400">{suggestion.reason}</p>
@@ -2685,7 +2639,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                             </p>
                           </div>
                         </div>
-                        
+
                         <div className="space-y-0.5 max-h-24 overflow-y-auto">
                           {suggestion.models.map(model => (
                             <div key={model.id} className="flex items-center gap-1.5 p-1 bg-gray-900/50 rounded">
@@ -2712,7 +2666,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                             </div>
                           ))}
                         </div>
-                        
+
                         <button
                           onClick={() => {
                             const modelIds = suggestion.models.map(m => m.id);
@@ -2743,11 +2697,10 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <button
                 onClick={cleanupSelectedModels}
                 disabled={selectedForCleanup.length === 0}
-                className={`flex-1 px-2 py-1 rounded text-xs text-white font-semibold ${
-                  selectedForCleanup.length > 0
-                    ? 'bg-red-600 hover:bg-red-700'
-                    : 'bg-gray-600 cursor-not-allowed'
-                }`}
+                className={`flex-1 px-2 py-1 rounded text-xs text-white font-semibold ${selectedForCleanup.length > 0
+                  ? 'bg-red-600 hover:bg-red-700'
+                  : 'bg-gray-600 cursor-not-allowed'
+                  }`}
               >
                 🗑️ Sil ({selectedForCleanup.length})
               </button>

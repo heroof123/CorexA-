@@ -21,14 +21,14 @@ export interface GgufModelStatus {
 // GGUF model yükle
 export async function loadGgufModel(config: GgufModelConfig): Promise<string> {
   console.log('🔵 GGUF model yükleniyor:', config);
-  
+
   try {
     const result = await invoke<string>('load_gguf_model', {
       modelPath: config.modelPath,
       nCtx: config.contextLength,
       nGpuLayers: config.gpuLayers
     });
-    
+
     console.log('✅ GGUF model yüklendi:', result);
     return result;
   } catch (error) {
@@ -39,38 +39,29 @@ export async function loadGgufModel(config: GgufModelConfig): Promise<string> {
 
 // GGUF model ile chat
 export async function chatWithGgufModel(
+  modelPath: string, // 🆕 Model path required
   prompt: string,
   maxTokens: number = 512,
   temperature: number = 0.7
 ): Promise<string> {
   console.log('🔵 GGUF chat başlıyor...');
+  console.log('📦 Model:', modelPath);
   console.log('📝 Prompt:', prompt.substring(0, 100));
   console.log('⚙️ Parametreler:', { maxTokens, temperature });
-  
+
   try {
-    // 🔧 Önce model yüklü mü kontrol et
-    const status = await invoke<{ loaded: boolean, model_path: string | null }>('get_gguf_model_status');
-    console.log('📊 Model durumu:', status);
-    
-    if (!status.loaded) {
-      throw new Error('❌ Model yüklü değil! Lütfen önce bir model yükleyin.');
-    }
-    
-    console.log('✅ Model yüklü, inference başlıyor...');
-    
-    // Normal text-only chat
+    // Normal text-only chat - artık model_path iletiliyor
     const response = await invoke<string>('chat_with_gguf_model', {
+      modelPath, // 🆕 backend'e ilet
       prompt,
       maxTokens,
       temperature
     });
-    
+
     console.log('✅ Yanıt alındı:', response.length, 'karakter');
-    console.log('📄 İlk 100 karakter:', response.substring(0, 100));
     return response;
   } catch (error) {
     console.error('❌ GGUF chat hatası:', error);
-    console.error('❌ Hata detayı:', JSON.stringify(error, null, 2));
     throw error;
   }
 }
@@ -78,7 +69,7 @@ export async function chatWithGgufModel(
 // GGUF model unload
 export async function unloadGgufModel(): Promise<string> {
   console.log('🔵 GGUF model unload ediliyor');
-  
+
   try {
     const result = await invoke<string>('unload_gguf_model');
     console.log('✅ GGUF model unloaded:', result);
@@ -90,13 +81,13 @@ export async function unloadGgufModel(): Promise<string> {
 }
 
 // GGUF model status
-export async function getGgufModelStatus(): Promise<GgufModelStatus> {
+export async function getGgufModelStatus(): Promise<{ loaded: boolean, loaded_models: string[] }> {
   try {
-    const status = await invoke<GgufModelStatus>('get_gguf_model_status');
+    const status = await invoke<{ loaded: boolean, loaded_models: string[] }>('get_gguf_model_status');
     return status;
   } catch (error) {
     console.error('❌ GGUF status hatası:', error);
-    return { loaded: false, model_path: null };
+    return { loaded: false, loaded_models: [] };
   }
 }
 
@@ -104,7 +95,7 @@ export async function getGgufModelStatus(): Promise<GgufModelStatus> {
 export async function selectGgufFile(): Promise<string | null> {
   try {
     const { open } = await import('@tauri-apps/plugin-dialog');
-    
+
     const selected = await open({
       multiple: false,
       filters: [{
@@ -112,11 +103,11 @@ export async function selectGgufFile(): Promise<string | null> {
         extensions: ['gguf']
       }]
     });
-    
+
     if (selected && typeof selected === 'string') {
       return selected;
     }
-    
+
     return null;
   } catch (error) {
     console.error('❌ Dosya seçme hatası:', error);

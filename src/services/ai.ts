@@ -75,14 +75,14 @@ function estimateTokens(text: string): number {
 async function generateSummary(messages: Array<{ role: string; content: string }>): Promise<string> {
   try {
     console.log('📝 Konuşma özeti oluşturuluyor...');
-    
+
     // Son 10 mesajı al (system prompt hariç)
     const recentMessages = messages.slice(-10).filter(m => m.role !== 'system');
-    
+
     if (recentMessages.length === 0) {
       return '';
     }
-    
+
     // Özet prompt'u oluştur
     const summaryPrompt = `Aşağıdaki konuşmayı kısa ve öz bir şekilde özetle. Sadece önemli noktaları ve yapılan işlemleri belirt. Maksimum 5 cümle kullan.
 
@@ -94,14 +94,14 @@ ${recentMessages.map(m => `${m.role === 'user' ? 'Kullanıcı' : 'AI'}: ${m.cont
     // AI'dan özet iste
     const { callAI } = await import('./aiProvider');
     const modelId = getModelIdForRole();
-    
+
     const summary = await callAI(summaryPrompt, modelId, [
       { role: 'user', content: summaryPrompt }
     ]);
-    
+
     console.log('✅ Özet oluşturuldu:', summary.substring(0, 100) + '...');
     return summary.trim();
-    
+
   } catch (error) {
     console.error('❌ Özet oluşturma hatası:', error);
     return ''; // Hata durumunda boş özet döndür
@@ -111,23 +111,23 @@ ${recentMessages.map(m => `${m.role === 'user' ? 'Kullanıcı' : 'AI'}: ${m.cont
 // 🆕 History'yi token bazlı temizle
 function pruneHistory(maxTokens: number): void {
   if (conversationContext.history.length <= 1) return; // System prompt'u koru
-  
+
   let totalTokens = 0;
   const systemPrompt = conversationContext.history[0]; // İlk mesaj system prompt
   const prunedHistory = [systemPrompt];
-  
+
   // Token sayılarını hesapla (eğer yoksa)
   conversationContext.history.forEach(msg => {
     if (!msg.tokens) {
       msg.tokens = estimateTokens(msg.content);
     }
   });
-  
+
   // Sondan başa doğru git (en yeni mesajları koru)
   for (let i = conversationContext.history.length - 1; i >= 1; i--) {
     const msg = conversationContext.history[i];
     const msgTokens = msg.tokens || estimateTokens(msg.content);
-    
+
     if (totalTokens + msgTokens < maxTokens) {
       prunedHistory.splice(1, 0, msg); // System prompt'tan sonra ekle
       totalTokens += msgTokens;
@@ -137,7 +137,7 @@ function pruneHistory(maxTokens: number): void {
       break;
     }
   }
-  
+
   conversationContext.history = prunedHistory;
   console.log(`📊 History: ${prunedHistory.length} mesaj, ~${totalTokens} token`);
 }
@@ -145,12 +145,66 @@ function pruneHistory(maxTokens: number): void {
 // Enhanced system prompts with personality
 // 🌍 EVRENSEL: Tüm AI modelleri için geçerli (Qwen, Mistral, Llama, GPT, vb.)
 // 🔒 ROL SİSTEMİ KALDIRILDI - Tek genel prompt
-function getSystemPromptForRole(): string {
-  
+function getSystemPromptForRole(toolsPrompt: string): string {
+
   // ⚠️ NOT: Roller tamamen kaldırıldı - Tek genel AI prompt'u kullanılır
-  
+
+
+  // � Sistem dilini otomatik algıla
+  const systemLanguage = navigator.language || navigator.languages?.[0] || 'en';
+  const isTurkish = systemLanguage.startsWith('tr');
+
   // 🎯 ÇOK GÜÇLÜ TÜRKÇE PROMPT (Qwen2.5 için optimize)
-  return `You are Corex AI - a Turkish coding assistant with automatic file creation capabilities.
+  if (isTurkish) {
+    return `You are Corex AI - a Turkish coding assistant with automatic file creation capabilities.
+
+🚨 ZORUNLU KURALLAR - MUTLAKA TAKİP ET:
+1. HER ZAMAN TÜRKÇE yanıt ver
+2. ASLA İngilizce veya başka dil kullanma
+3. Türkçe dilbilgisi kurallarına uy
+4. Kullanıcı İngilizce yazsa bile sen TÜRKÇE cevap ver
+
+🇹🇷 TÜRKÇE DİL KURALLARI:
+
+**Zamirler:**
+- BEN (I): yapıyorum, veriyorum, inceledim
+- SİZ (You): yapıyorsunuz, istersiniz, istiyorsunuz
+
+**Doğru Örnekler:**
+✅ "Size yardımcı olabilirim" (I can help you)
+✅ "Bana ne yapmamı istersiniz?" (What do you want me to do?)
+✅ "Projenizi inceledim" (I examined your project)
+
+**Yanlış Örnekler (YAPMA):**
+❌ "Size yardımcı olabilirsiniz"
+❌ İngilizce kelimeler kullanmak
+❌ Çince karakterler kullanmak
+
+📋 PROJE ANALİZİ:
+- KISA bilgi ver (3-4 cümle)
+- Proje tipi + amaç + özellikler
+- Tüm dosyaları listeleme!
+
+💬 KONUŞMA STİLİ:
+- Samimi ve sıcak
+- Emoji kullan 😊
+- Kısa ve net
+- HER ZAMAN TÜRKÇE!
+
+📝 KOD BLOĞU FORMATI - ÇOK ÖNEMLİ:
+
+Kullanıcı kod/dosya istediğinde, KISA yanıt ver ve kod bloğu sağla:
+
+**Format:**
+\`\`\`language filename.ext
+kod buraya
+\`\`\`
+
+**Örnek:**
+
+Kullanıcı: "HTML hesap makinesi yap"
+
+AI: "Tamam, hesap makinesi oluşturuyorum 🧮
 
 🚨 CRITICAL RULES - MUST FOLLOW:
 1. ALWAYS respond in TURKISH language (Türkçe)
@@ -312,64 +366,48 @@ TOOL:test_code|PARAMS:{"type":"build"}
 Step 4 - RESULT:
 "✅ Login butonu eklendi ve test edildi!"
 
-🔧 TOOL SYSTEM - VERY IMPORTANT:
 
-**Available Tools:**
-1. write_file - Create or update files
-   - Use this to CREATE NEW FILES or MODIFY existing files
-   - Parameters: {"path": "src/Component.tsx", "content": "file content here"}
-   
-2. read_file - Read file contents
-   - Parameters: {"path": "src/App.tsx"}
-   
-3. run_terminal - Execute commands
-   - Parameters: {"command": "npm install axios"}
-   
-4. list_files - List directory files
-   - Parameters: {"path": "."}
+${toolsPrompt}
 
-**TOOL FORMAT (CRITICAL):**
-TOOL:tool_name|PARAMS:{"param":"value"}
+🤖 AI ANALİZ ARAÇLARI - OTOMATİK KULLAN:
 
-**EXAMPLES:**
+Kullanıcı bir dosya hakkında soru sorduğunda veya istekte bulunduğunda, aşağıdaki araçları OTOMATIK olarak çağır (onay bekleme):
 
-Example 1 - Create a new file:
-User: "Login butonu yap"
-AI: "Tamam, login butonu oluşturuyorum 🎨"
-TOOL:write_file|PARAMS:{"path":"src/components/LoginButton.tsx","content":"import React from 'react';\n\nexport default function LoginButton() {\n  return (\n    <button className=\"login-btn\">\n      Giriş Yap\n    </button>\n  );\n}"}
+| Kullanıcı ne der | Hangi aracı çağır |
+|---|---|
+| "bu dosyayı incele / kontrol et / analiz et" | code_review |
+| "kalite nedir / kaç puan alır" | code_review |
+| "dokümantasyon oluştur / belgele / yorum ekle" | generate_docs |
+| "test yaz / unit test oluştur" | generate_tests |
+| "refactor et / iyileştir / düzenle" | refactor_code |
+| "güvenlik açığı var mı / güvenli mi?" | security_scan |
 
-Example 2 - Read then modify:
-User: "App.tsx'e dark mode ekle"
-AI: "Önce dosyayı okuyorum 📖"
-TOOL:read_file|PARAMS:{"path":"src/App.tsx"}
-(wait for result)
-AI: "Dark mode ekliyorum 🌙"
-TOOL:write_file|PARAMS:{"path":"src/App.tsx","content":"updated content here"}
+KULLANIM ÖRNEĞİ (tek adımda, açıklama yapma, direkt çağır):
+Kullanıcı: "src/App.tsx dosyasını incele"
+Sen: "Dosyayı inceliyorum 🔍"
+TOOL:code_review|PARAMS:{"path":"src/App.tsx"}
 
-Example 3 - Install package:
-User: "axios kur"
-AI: "Axios kuruyorum 📦"
-TOOL:run_terminal|PARAMS:{"command":"npm install axios"}
-
-🚨 CRITICAL RULES:
-1. ALWAYS use write_file to create/modify files - DON'T just show code!
-2. Use TOOL: format EXACTLY as shown (with pipe | separator)
-3. Put entire file content in "content" parameter
-4. Explain in Turkish BEFORE using tool
-5. For new components: Use write_file directly, don't ask user to create file!
-
-🎯 WHEN TO USE MULTI-AGENT:
-
-**Simple tasks:** Just do it
-- "package.json oku" → read_file
-- "npm install axios" → run_terminal
-
-**Complex tasks:** Use workflow
-- "Login sistemi ekle" → plan_task → generate_code → write_file → test_code
-- "Dark mode yap" → plan_task → generate_code → test_code
+KURALLAR:
+1. Önce kısa bir mesaj yaz (1 cümle), sonra TOOL çağrısını yap
+2. Dosya yolunu kullanıcının mesajından veya bağlamdan al
+3. Araç sonucu gelince sonucu Türkçe özetle
+4. Birden fazla araç gerekiyorsa sırasıyla çağır
 
 🚨 REMEMBER: Every response MUST be in Turkish (Türkçe)!`;
+  }
+
+  // 🌍 İngilizce fallback (diğer diller için)
+  return `You are Corex AI - a helpful coding assistant with automatic file creation capabilities.
+
+🚨 CRITICAL RULES:
+1. Be helpful and friendly
+2. Provide clear explanations
+3. Write clean, working code
+4. Use appropriate language based on user's input
+
+${toolsPrompt}`;
 }
+
 
 // ✅ YENİ FONKSİYON - Rust backend kullanarak dosya tarama (ŞU ANDA KULLANILMIYOR)
 /* async function getAllProjectFiles(dirPath: string): Promise<string[]> {
@@ -495,7 +533,7 @@ TOOL:run_terminal|PARAMS:{"command":"npm install axios"}
 */
 
 export async function sendToAI(
-  message: string, 
+  message: string,
   resetHistory: boolean = false,
   onToolExecution?: (toolName: string, status: 'running' | 'completed' | 'failed', result?: any, error?: string) => void,
   onToolApprovalRequest?: (toolName: string, parameters: any) => Promise<boolean>
@@ -505,14 +543,14 @@ export async function sendToAI(
     console.warn("⚠️ AI çağrısı zaten işleniyor, yeni çağrı reddedildi");
     throw new Error("AI çağrısı zaten işleniyor. Lütfen bekleyin.");
   }
-  
+
   sendToAI.isProcessing = true;
-  
+
   try {
     if (resetHistory) {
       conversationContext.history = [];
     }
-    
+
     // 🆕 GGUF model config'inden context ve output limitlerini al
     const ggufConfig = localStorage.getItem('gguf-active-model');
     if (ggufConfig) {
@@ -524,21 +562,27 @@ export async function sendToAI(
         console.warn('⚠️ GGUF config okunamadı, default kullanılıyor');
       }
     }
-    
+
     // 🆕 Output mode'u localStorage'dan al
     const outputMode = localStorage.getItem('ai-output-mode') || 'normal';
-    conversationContext.maxOutputTokens = 
+    conversationContext.maxOutputTokens =
       outputMode === 'brief' ? 2048 :
-      outputMode === 'detailed' ? 16384 : 8192;
-    
+        outputMode === 'detailed' ? 16384 : 8192;
+
     console.log(`📤 Output limit: ${conversationContext.maxOutputTokens} (${outputMode})`);
-    
+
+
     // Analyze user intent and update context
     const userIntent = analyzeUserIntent(message);
     updateConversationContext(message, userIntent);
-    
+
+    // Get tools prompt dynamically (includes MCP tools)
+    const { getToolsPrompt } = await import('./aiTools');
+    const toolsPrompt = await getToolsPrompt();
+
     // Get system prompt
-    const systemPrompt = getSystemPromptForRole();
+    const systemPrompt = getSystemPromptForRole(toolsPrompt);
+
 
     // Add system prompt if this is the first message
     if (conversationContext.history.length === 0) {
@@ -558,24 +602,24 @@ export async function sendToAI(
       timestamp: Date.now(),
       tokens: userTokens
     });
-    
+
     // 🆕 Mesaj sayacını artır
     conversationContext.messagesSinceLastSummary++;
-    
+
     // 🆕 Her 10 mesajda bir özet oluştur
     if (conversationContext.messagesSinceLastSummary >= 10) {
       console.log('📝 10 mesaj geçti, özet oluşturuluyor...');
-      
+
       const summary = await generateSummary(conversationContext.history);
-      
+
       if (summary) {
         conversationContext.summary = summary;
         conversationContext.messagesSinceLastSummary = 0;
-        
+
         console.log('✅ Özet kaydedildi:', summary.substring(0, 100) + '...');
       }
     }
-    
+
     // 🆕 History'yi temizle (context'in %40'ı history için)
     const maxHistoryTokens = Math.floor(conversationContext.maxContextTokens * 0.4);
     pruneHistory(maxHistoryTokens);
@@ -583,7 +627,7 @@ export async function sendToAI(
     // 🆕 Dinamik AI provider kullan - conversation history ile
     const { callAI } = await import('./aiProvider');
     const modelId = getModelIdForRole();
-    
+
     // 🆕 Özet varsa history'nin başına ekle (system prompt'tan sonra)
     let historyWithSummary = [...conversationContext.history];
     if (conversationContext.summary) {
@@ -593,56 +637,56 @@ export async function sendToAI(
         timestamp: Date.now(),
         tokens: estimateTokens(conversationContext.summary)
       };
-      
+
       // System prompt'tan sonra, diğer mesajlardan önce ekle
       historyWithSummary.splice(1, 0, summaryMessage);
       console.log('📌 Özet history\'ye eklendi');
     }
-    
+
     // Prepare conversation history for AI (only role and content)
     const historyForAI = historyWithSummary.map(msg => ({
       role: msg.role,
       content: msg.content
     }));
-    
+
     console.log('📤 AI\'ye gönderilen history:', historyForAI.length, 'mesaj');
     console.log('📊 Tahmini history token:', conversationContext.history.reduce((sum, msg) => sum + (msg.tokens || 0), 0));
-    
+
     // Add timeout to prevent hanging (5 minutes for GGUF models)
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error('AI çağrısı zaman aşımına uğradı (300 saniye)')), 300000);
     });
-    
+
     let response = await Promise.race([
       callAI(message, modelId, historyForAI), // 🔥 History ile gönder
       timeoutPromise
     ]);
-    
+
     // 🔧 TOOL SYSTEM - Parse and execute tools
     const { parseToolCall, executeTool } = await import('./aiTools');
     const { requiresApproval, getAutonomyConfig } = await import('./autonomy');
-    
+
     let toolCall = parseToolCall(response);
     let toolIterations = 0;
     const maxToolIterations = 5; // Sonsuz döngü önleme
-    
+
     while (toolCall && toolIterations < maxToolIterations) {
       toolIterations++;
       console.log(`🔧 Tool çağrısı tespit edildi (${toolIterations}/${maxToolIterations}):`, toolCall.toolName);
-      
+
       // 🎚️ AUTONOMY CHECK - Onay gerekli mi?
       const config = getAutonomyConfig();
       const needsApproval = requiresApproval(toolCall.toolName, toolCall.parameters, config);
-      
+
       if (needsApproval && onToolApprovalRequest) {
         console.log('🔐 Tool onay gerektiriyor:', toolCall.toolName);
-        
+
         // Kullanıcıdan onay iste
         const approved = await onToolApprovalRequest(toolCall.toolName, toolCall.parameters);
-        
+
         if (!approved) {
           console.log('❌ Tool reddedildi:', toolCall.toolName);
-          
+
           // Tool reddedildi mesajını history'ye ekle
           const rejectionMessage = `🚫 Tool reddedildi: ${toolCall.toolName}`;
           conversationContext.history.push({
@@ -651,41 +695,41 @@ export async function sendToAI(
             timestamp: Date.now(),
             tokens: estimateTokens(rejectionMessage)
           });
-          
+
           // 🆕 Rejection mesajı da sayılır
           conversationContext.messagesSinceLastSummary++;
-          
+
           // AI'ya reddetme bilgisini gönder
           const continuePrompt = `Tool "${toolCall.toolName}" kullanıcı tarafından reddedildi. Alternatif bir yol öner veya kullanıcıya açıkla.`;
           const historyForAI2 = conversationContext.history.map(msg => ({
             role: msg.role,
             content: msg.content
           }));
-          
+
           response = await Promise.race([
             callAI(continuePrompt, modelId, historyForAI2),
             timeoutPromise
           ]);
-          
+
           // Yeni response'da başka tool var mı kontrol et
           toolCall = parseToolCall(response);
           continue; // Döngüye devam et
         }
-        
+
         console.log('✅ Tool onaylandı:', toolCall.toolName);
       } else {
         console.log('🚀 Tool otomatik çalıştırılıyor (Level ' + config.level + '):', toolCall.toolName);
       }
-      
+
       // 🌊 Tool execution başladı - callback çağır
       if (onToolExecution) {
         onToolExecution(toolCall.toolName, 'running');
       }
-      
+
       // Tool'u çalıştır
       const toolResult = await executeTool(toolCall.toolName, toolCall.parameters);
       console.log('🔧 Tool sonucu:', toolResult);
-      
+
       // 🌊 Tool execution tamamlandı - callback çağır
       if (onToolExecution) {
         if (toolResult.success) {
@@ -694,7 +738,7 @@ export async function sendToAI(
           onToolExecution(toolCall.toolName, 'failed', toolResult, toolResult.error);
         }
       }
-      
+
       // Tool sonucunu history'ye ekle
       const toolResultMessage = `🔧 Tool Result (${toolCall.toolName}):\n${JSON.stringify(toolResult, null, 2)}`;
       conversationContext.history.push({
@@ -703,31 +747,31 @@ export async function sendToAI(
         timestamp: Date.now(),
         tokens: estimateTokens(toolResultMessage)
       });
-      
+
       // 🆕 Tool mesajı da sayılır
       conversationContext.messagesSinceLastSummary++;
-      
+
       // AI'ya tool sonucunu gönder ve devam et
       const continuePrompt = "Tool çalıştırıldı. Sonucu yukarıda görebilirsin. Devam et.";
       const historyForAI2 = conversationContext.history.map(msg => ({
         role: msg.role,
         content: msg.content
       }));
-      
+
       response = await Promise.race([
         callAI(continuePrompt, modelId, historyForAI2),
         timeoutPromise
       ]);
-      
+
       // Yeni response'da başka tool var mı kontrol et
       toolCall = parseToolCall(response);
     }
-    
+
     if (toolIterations >= maxToolIterations) {
       console.warn('⚠️ Maksimum tool iterasyonu aşıldı');
       response += '\n\n⚠️ (Maksimum tool çağrısı limitine ulaşıldı)';
     }
-    
+
     // Add AI response to history
     const responseTokens = estimateTokens(response);
     conversationContext.history.push({
@@ -736,10 +780,10 @@ export async function sendToAI(
       timestamp: Date.now(),
       tokens: responseTokens
     });
-    
+
     // 🆕 AI cevabı da sayılır
     conversationContext.messagesSinceLastSummary++;
-    
+
     // 🆕 Response çok uzunsa uyar
     if (responseTokens > conversationContext.maxOutputTokens * 0.9) {
       console.warn(`⚠️ Cevap çok uzun: ${responseTokens} token (limit: ${conversationContext.maxOutputTokens})`);
@@ -748,28 +792,90 @@ export async function sendToAI(
     return response;
   } catch (error) {
     console.error('❌ AI hatası:', error);
-    
+
     // Aktif model bulunamadıysa kullanıcıya bildir
     if (error instanceof Error && error.message.includes('Model bulunamadı')) {
       throw new Error('❌ Aktif AI modeli bulunamadı. Lütfen AI ayarlarından bir model aktif edin.');
     }
-    
+
     // Bağlantı hatası varsa kullanıcıya bildir
     if (error instanceof Error && (error.message.includes('fetch') || error.message.includes('network'))) {
       throw new Error('❌ AI sunucusuna bağlanılamadı. LM Studio veya AI sağlayıcınızın çalıştığından emin olun.');
     }
-    
+
     // Timeout hatası
     if (error instanceof Error && error.message.includes('zaman aşımı')) {
       throw new Error('❌ AI yanıt verme süresi aşıldı. Lütfen tekrar deneyin.');
     }
-    
+
     // Diğer hatalar için genel mesaj
     throw new Error(`❌ AI hatası: ${error instanceof Error ? error.message : 'Bilinmeyen hata'}`);
   } finally {
     sendToAI.isProcessing = false;
   }
 }
+
+// ⚖️ MODEL KARŞILAŞTIRMA MODU
+export async function compareModels(
+  message: string,
+  modelId1: string,
+  modelId2: string,
+  onToken1?: (token: string, metrics?: { speed: number }) => void,
+  onToken2?: (token: string, metrics?: { speed: number }) => void
+): Promise<{ response1: string; response2: string; metrics1: any; metrics2: any }> {
+  console.log(`⚖️ Karşılaştırma başlatılıyor: ${modelId1} vs ${modelId2}`);
+
+  const { callAI } = await import('./aiProvider');
+
+  // Ortak history hazırla
+  const historyForAI = conversationContext.history.map(msg => ({
+    role: msg.role,
+    content: msg.content
+  }));
+
+  const start1 = Date.now();
+  let tokens1 = 0;
+  const promise1 = callAI(message, modelId1, historyForAI, (token) => {
+    tokens1++;
+    const elapsed = (Date.now() - start1) / 1000;
+    const speed = elapsed > 0 ? tokens1 / elapsed : 0;
+    if (onToken1) onToken1(token, { speed });
+  });
+
+  const start2 = Date.now();
+  let tokens2 = 0;
+  const promise2 = callAI(message, modelId2, historyForAI, (token) => {
+    tokens2++;
+    const elapsed = (Date.now() - start2) / 1000;
+    const speed = elapsed > 0 ? tokens2 / elapsed : 0;
+    if (onToken2) onToken2(token, { speed });
+  });
+
+  const [res1, res2] = await Promise.all([promise1, promise2]);
+
+  const end1 = Date.now();
+  const end2 = Date.now();
+
+  const metrics1 = {
+    duration: (end1 - start1) / 1000,
+    tokens: tokens1,
+    speed: tokens1 / ((end1 - start1) / 1000)
+  };
+
+  const metrics2 = {
+    duration: (end2 - start2) / 1000,
+    tokens: tokens2,
+    speed: tokens2 / ((end2 - start2) / 1000)
+  };
+
+  return {
+    response1: res1,
+    response2: res2,
+    metrics1,
+    metrics2
+  };
+}
+
 
 // Add static property to track processing state
 sendToAI.isProcessing = false;
@@ -795,56 +901,56 @@ sendToAI.isProcessing = false;
 // }
 
 // 🆕 Role'den Model ID'ye çevir (dinamik sistem için)
-function getModelIdForRole(): string {
+export function getModelIdForRole(): string {
   // Aktif provider'lardan uygun modeli bul
   const savedProviders = localStorage.getItem('corex-ai-providers');
   if (!savedProviders) {
     console.warn('⚠️ Provider bulunamadı, varsayılan model kullanılıyor');
     throw new Error('Aktif AI modeli bulunamadı. Lütfen AI ayarlarından bir model aktif edin.');
   }
-  
+
   try {
     const providers = JSON.parse(savedProviders);
     console.log('🔍 Provider sayısı:', providers.length);
-    
+
     // 🔥 ÖNCE GGUF provider'ı kontrol et - isActive durumuna bakmadan
     const ggufProvider = providers.find((p: any) => p.id === 'gguf-direct');
     if (ggufProvider && ggufProvider.models && ggufProvider.models.length > 0) {
       console.log('🎮 GGUF provider bulundu, model kontrolü yapılıyor...');
-      
+
       // GGUF provider'da aktif model ara
       for (const model of ggufProvider.models) {
         console.log(`  🔍 GGUF Model: ${model.displayName}, isActive: ${model.isActive}`);
         if (model.isActive) {
           console.log(`🎯 GGUF aktif model bulundu: ${model.displayName} (${model.id})`);
-          
+
           // 🔥 GGUF provider'ı aktif yap ve kaydet
           if (!ggufProvider.isActive) {
             console.log('⚠️ GGUF provider pasifti, aktif ediliyor...');
             ggufProvider.isActive = true;
             localStorage.setItem('corex-ai-providers', JSON.stringify(providers));
           }
-          
+
           return model.id;
         }
       }
     }
-    
+
     // GGUF'ta aktif model yoksa, diğer provider'ları kontrol et
     console.log('🔍 Diger providerlar kontrol ediliyor...');
     for (const provider of providers) {
       console.log(`🔍 Provider kontrol: ${provider.id}, isActive: ${provider.isActive}, models: ${provider.models?.length || 0}`);
-      
+
       if (!provider.isActive) {
         console.log(`⏭️ Provider pasif, atlanıyor: ${provider.id}`);
         continue;
       }
-      
+
       if (!provider.models || provider.models.length === 0) {
         console.log(`⏭️ Provider'da model yok: ${provider.id}`);
         continue;
       }
-      
+
       for (const model of provider.models) {
         console.log(`  🔍 Model kontrol: ${model.displayName}, isActive: ${model.isActive}`);
         if (model.isActive) {
@@ -853,7 +959,7 @@ function getModelIdForRole(): string {
         }
       }
     }
-    
+
     // Hiç aktif model bulunamadıysa, detaylı bilgi ver
     console.error('❌ Hiç aktif model bulunamadı!');
     console.error('📊 Provider durumları:', providers.map((p: any) => ({
@@ -862,11 +968,11 @@ function getModelIdForRole(): string {
       modelCount: p.models?.length || 0,
       activeModels: p.models?.filter((m: any) => m.isActive).length || 0
     })));
-    
+
   } catch (error) {
     console.error('❌ Model ID çevirme hatası:', error);
   }
-  
+
   console.warn('⚠️ Hiç aktif model bulunamadı');
   throw new Error('Aktif AI modeli bulunamadı. Lütfen AI ayarlarından bir model aktif edin.');
 }
@@ -883,39 +989,39 @@ export function resetConversation() {
 export function parseAIResponse(response: string): AIResponse {
   const actions: CodeAction[] = [];
   let cleanText = response;
-  
+
   console.log("🔍 AI Response parse ediliyor:", response.substring(0, 200) + "...");
-  
+
   // Match code blocks with optional file path: ```language:path or just ```language
   const codeBlockRegex = /```(\w+)(?::([^\n]+))?\n([\s\S]+?)```/g;
   let match;
-  
+
   while ((match = codeBlockRegex.exec(response)) !== null) {
     const language = match[1] || 'text';
     const explicitPath = match[2]?.trim(); // File path from ```typescript:src/test.ts
     const code = match[3].trim();
-    
+
     // Skip single-line code blocks
     const lineCount = code.split('\n').length;
     if (lineCount === 1) {
       console.log(`⏭️ Tek satırlık kod bloğu atlandı: ${code.substring(0, 50)}...`);
       continue;
     }
-    
+
     // Use explicit path if provided, otherwise try to extract from context
     let filePath = explicitPath;
-    
+
     if (!filePath) {
       // Attempt to extract file path from context before the code block
       const beforeBlock = response.substring(0, match.index);
       const pathMatch = beforeBlock.match(/(?:dosya:|file:|path:|create|oluştur|update|düzenle|edit)[\s:]*([\w\/\-_.]+\.\w+)/i);
       filePath = pathMatch ? pathMatch[1] : generateDefaultPath(language);
     }
-    
+
     // Determine action type from context
     const actionContext = response.substring(Math.max(0, match.index - 200), match.index).toLowerCase();
     let actionType: 'create' | 'modify' | 'delete' = 'create';
-    
+
     if (actionContext.includes('oluştur') || actionContext.includes('create') || actionContext.includes('yeni')) {
       actionType = 'create';
     } else if (actionContext.includes('düzenle') || actionContext.includes('update') || actionContext.includes('değiştir') || actionContext.includes('edit') || actionContext.includes('modify')) {
@@ -923,7 +1029,7 @@ export function parseAIResponse(response: string): AIResponse {
     } else if (actionContext.includes('sil') || actionContext.includes('delete') || actionContext.includes('kaldır')) {
       actionType = 'delete';
     }
-    
+
     actions.push({
       id: `action-${Date.now()}-${actions.length}`,
       type: actionType,
@@ -931,13 +1037,13 @@ export function parseAIResponse(response: string): AIResponse {
       content: code,
       lineNumber: match.index
     });
-    
+
     // Remove the code block from text to get clean explanation
     cleanText = cleanText.replace(match[0], `[Kod bloğu: ${filePath}]`);
   }
-  
+
   console.log(`✅ ${actions.length} adet kod bloğu bulundu`);
-  
+
   return {
     explanation: cleanText.trim(),
     actions,
@@ -960,7 +1066,7 @@ function generateDefaultPath(language: string): string {
     css: 'css',
     json: 'json'
   };
-  
+
   const ext = extensions[language] || 'txt';
   return `generated_${timestamp}.${ext}`;
 }
@@ -968,29 +1074,29 @@ function generateDefaultPath(language: string): string {
 // Analyze user intent from message
 function analyzeUserIntent(message: string): string {
   const lowerMessage = message.toLowerCase();
-  
-  if (lowerMessage.includes('oluştur') || lowerMessage.includes('yarat') || lowerMessage.includes('yap') || 
-      lowerMessage.includes('create') || lowerMessage.includes('generate')) {
+
+  if (lowerMessage.includes('oluştur') || lowerMessage.includes('yarat') || lowerMessage.includes('yap') ||
+    lowerMessage.includes('create') || lowerMessage.includes('generate')) {
     return 'create';
   } else if (lowerMessage.includes('düzenle') || lowerMessage.includes('değiştir') || lowerMessage.includes('güncelle') ||
-             lowerMessage.includes('edit') || lowerMessage.includes('modify') || lowerMessage.includes('update')) {
+    lowerMessage.includes('edit') || lowerMessage.includes('modify') || lowerMessage.includes('update')) {
     return 'edit';
   } else if (lowerMessage.includes('açıkla') || lowerMessage.includes('anlat') || lowerMessage.includes('nedir') ||
-             lowerMessage.includes('explain') || lowerMessage.includes('what is') || lowerMessage.includes('how')) {
+    lowerMessage.includes('explain') || lowerMessage.includes('what is') || lowerMessage.includes('how')) {
     return 'explain';
-  } else if (lowerMessage.includes('bul') || lowerMessage.includes('ara') || lowerMessage.includes('search') || 
-             lowerMessage.includes('find')) {
+  } else if (lowerMessage.includes('bul') || lowerMessage.includes('ara') || lowerMessage.includes('search') ||
+    lowerMessage.includes('find')) {
     return 'search';
   } else if (lowerMessage.includes('hata') || lowerMessage.includes('bug') || lowerMessage.includes('düzelt') ||
-             lowerMessage.includes('fix') || lowerMessage.includes('problem')) {
+    lowerMessage.includes('fix') || lowerMessage.includes('problem')) {
     return 'debug';
   } else if (lowerMessage.includes('optimize') || lowerMessage.includes('iyileştir') || lowerMessage.includes('geliştir') ||
-             lowerMessage.includes('improve') || lowerMessage.includes('enhance')) {
+    lowerMessage.includes('improve') || lowerMessage.includes('enhance')) {
     return 'optimize';
   } else if (lowerMessage.includes('test') || lowerMessage.includes('kontrol') || lowerMessage.includes('check')) {
     return 'test';
   }
-  
+
   return 'chat';
 }
 
@@ -999,13 +1105,13 @@ function updateConversationContext(message: string, intent: string) {
   // Extract file mentions
   const filePattern = /[\w\-_]+\.(ts|tsx|js|jsx|py|rs|java|cpp|c|go|html|css|json|md)/gi;
   const fileMentions = message.match(filePattern) || [];
-  
+
   if (fileMentions.length > 0) {
     conversationContext.recentFiles = [
       ...new Set([...fileMentions, ...conversationContext.recentFiles])
     ].slice(0, 5); // Keep only last 5 unique files
   }
-  
+
   // Detect ongoing task
   if (intent === 'create' || intent === 'edit') {
     conversationContext.ongoingTask = intent;
@@ -1014,7 +1120,7 @@ function updateConversationContext(message: string, intent: string) {
   } else {
     conversationContext.ongoingTask = null;
   }
-  
+
   // Update current topic
   if (intent !== 'chat') {
     conversationContext.currentTopic = intent;
@@ -1063,15 +1169,15 @@ export async function buildContext(
 ): Promise<string> {
   // Detect casual conversation
   const isCasualChat = /^(selam|merhaba|hey|hi|hello|nasılsın|nasıl gidiyor|naber|ne yapıyorsun|teşekkür|sağol|thanks|thank you)$/i.test(userMessage.trim()) ||
-                      /^(günaydın|iyi akşamlar|iyi geceler|hoşça kal|görüşürüz|bye|good morning|good night)$/i.test(userMessage.trim());
-  
+    /^(günaydın|iyi akşamlar|iyi geceler|hoşça kal|görüşürüz|bye|good morning|good night)$/i.test(userMessage.trim());
+
   // Detect request type
   const isTranslationRequest = /türkçe (yap|çevir|söyle)|translate to turkish/i.test(userMessage);
   const isCodeRequest = /ekle|yaz|oluştur|değiştir|düzelt|implement|create|add|modify|fix|refactor|update/i.test(userMessage);
   const isProjectExplanation = /proje|açıkla|anlat|mimari|yapı|structure|explain|describe|what is|nedir/i.test(userMessage);
-  
+
   let context = "";
-  
+
   // Handle casual conversation
   if (isCasualChat) {
     context += `Sen Corex AI'sın - arkadaş canlısı kod asistanı.
@@ -1087,7 +1193,7 @@ Doğal ve samimi karşılık ver!
 `;
     return context;
   }
-  
+
   // If this is just a translation request, don't add file context
   if (isTranslationRequest) {
     context += "=== KULLANICI İSTEĞİ ===\n\n";
@@ -1095,7 +1201,7 @@ Doğal ve samimi karşılık ver!
     context += "\n\nNOT: Kullanıcı önceki cevabını Türkçeye çevirmeni istiyor. Sadece önceki cevabını Türkçe olarak tekrar yaz, yeni analiz yapma.\n";
     return context;
   }
-  
+
   // Enhanced personality introduction - KISA (Token tasarrufu)
   context += `Sen Corex AI'sın - kod asistanı.
 
@@ -1104,14 +1210,14 @@ TÜR: ${conversationContext.projectContext.type !== 'unknown' ? conversationCont
 DOSYA: ${totalIndexedFiles || 0}
 
 `;
-  
+
   // 🆕 Proje açıklama isteğinde - Detay seviyesi sor
   if (isProjectExplanation && !isCodeRequest && allFiles) {
     // Kullanıcı detay seviyesi belirtmiş mi kontrol et
     const detailLevel = userMessage.toLowerCase().includes('detaylı') || userMessage.toLowerCase().includes('derin') || userMessage.toLowerCase().includes('detailed') ? 'detailed' :
-                       userMessage.toLowerCase().includes('kısa') || userMessage.toLowerCase().includes('öz') || userMessage.toLowerCase().includes('brief') ? 'brief' :
-                       'ask'; // Belirtmemişse sor
-    
+      userMessage.toLowerCase().includes('kısa') || userMessage.toLowerCase().includes('öz') || userMessage.toLowerCase().includes('brief') ? 'brief' :
+        'ask'; // Belirtmemişse sor
+
     // Eğer detay seviyesi belirtilmemişse, kullanıcıya sor
     if (detailLevel === 'ask') {
       context += `Sen Corex AI'sın - kod asistanı.
@@ -1137,51 +1243,51 @@ Bu proje hakkında bilgi vermek istiyorum. Nasıl anlatmamı istersin?
 Lütfen seçim yap: "kısa anlat" veya "detaylı anlat" 😊`;
       return context;
     }
-    
+
     // Import fonksiyonları
     const { getImportantFiles, getProjectStructureFiles, getFileExtension: getExt } = await import('./contextProvider');
-    
+
     context += "=== PROJE ANALİZİ ===\n\n";
-    
+
     if (detailLevel === 'brief') {
       // KISA VE ÖZ - Sadece özet bilgi
       const importantFiles = getImportantFiles(allFiles);
-      
+
       context += "📋 Önemli Dosyalar:\n";
       importantFiles.slice(0, 5).forEach((file: any) => {
         const fileName = file.path.split(/[\\/]/).pop() || file.path;
         context += `• ${fileName}\n`;
       });
       context += "\n";
-      
+
       const folders = new Set<string>();
       allFiles.forEach((file: any) => {
         const pathParts = file.path.split(/[\\/]/);
         if (pathParts.length > 1) folders.add(pathParts[0]);
       });
-      
+
       context += "📂 Ana Klasörler:\n";
       Array.from(folders).slice(0, 8).forEach(folder => {
         const fileCount = allFiles.filter((f: any) => f.path.startsWith(folder)).length;
         context += `• ${folder}/ (${fileCount} dosya)\n`;
       });
-      
+
       context += `\n📊 Toplam ${totalIndexedFiles} dosya\n\n`;
       context += "=== GÖREV ===\n\n";
       context += "Projeyi KISA ve ÖZ açıkla (3-5 cümle):\n";
       context += "- Ne yapar?\n";
       context += "- Hangi teknolojiler?\n";
       context += "- Ana özellikler?\n";
-      
+
     } else {
       // DETAYLI - Tüm bilgileri ver
       const importantFiles = getImportantFiles(allFiles);
-      
+
       context += "📋 Önemli Dosyalar (İçerikli):\n\n";
       importantFiles.forEach((file: any) => {
         const fileName = file.path.split(/[\\/]/).pop() || file.path;
         context += `✅ ${fileName}\n`;
-        
+
         if (file.content && file.content.length > 0) {
           context += "```" + getExt(file.path) + "\n";
           context += file.content.substring(0, 2000); // 2000 karakter
@@ -1191,7 +1297,7 @@ Lütfen seçim yap: "kısa anlat" veya "detaylı anlat" 😊`;
           context += "\n```\n\n";
         }
       });
-      
+
       const structureFiles = getProjectStructureFiles(allFiles);
       context += "📁 Ana Yapı Dosyaları:\n";
       structureFiles.slice(0, 20).forEach((file: any) => {
@@ -1201,7 +1307,7 @@ Lütfen seçim yap: "kısa anlat" veya "detaylı anlat" 😊`;
         context += `• ${folder}/${fileName}\n`;
       });
       context += "\n";
-      
+
       const folders = new Map<string, number>();
       allFiles.forEach((file: any) => {
         const pathParts = file.path.split(/[\\/]/);
@@ -1210,12 +1316,12 @@ Lütfen seçim yap: "kısa anlat" veya "detaylı anlat" 😊`;
           folders.set(folder, (folders.get(folder) || 0) + 1);
         }
       });
-      
+
       context += "📂 Klasör Yapısı:\n";
       Array.from(folders.entries()).forEach(([folder, count]) => {
         context += `• ${folder}/ (${count} dosya)\n`;
       });
-      
+
       context += `\n📊 Toplam ${totalIndexedFiles} dosya\n\n`;
       context += "=== GÖREV ===\n\n";
       context += "Projeyi DETAYLI açıkla:\n";
@@ -1227,20 +1333,20 @@ Lütfen seçim yap: "kısa anlat" veya "detaylı anlat" 😊`;
       context += "6. Mimari yapı ve tasarım desenleri\n";
       context += "7. Bağımlılıklar ve entegrasyonlar\n";
     }
-    
+
     return context;
   }
-  
+
   // Add relevant files with content
   if (relevantFiles.length > 0) {
     context += "=== İLGİLİ DOSYALAR ===\n\n";
-    
+
     relevantFiles.slice(0, 3).forEach(file => { // Maksimum 3 dosya
       const fileName = file.path.split(/[\\/]/).pop() || file.path;
       const fullPath = file.path;
       context += `📄 ${fileName} (${fullPath})\n`;
       context += `Similarity: ${(file.score * 100).toFixed(1)}%\n`;
-      
+
       if (isCodeRequest) {
         context += "```" + getFileExtension(file.path) + "\n";
         // 4000 → 1500 karakter (çok daha az!)
@@ -1252,7 +1358,7 @@ Lütfen seçim yap: "kısa anlat" veya "detaylı anlat" 😊`;
       }
     });
   }
-  
+
   // Add current file if open
   if (currentFile && isCodeRequest) {
     const fileName = currentFile.path.split(/[\\/]/).pop() || currentFile.path;
@@ -1266,14 +1372,14 @@ Lütfen seçim yap: "kısa anlat" veya "detaylı anlat" 😊`;
     }
     context += "\n```\n\n";
   }
-  
+
   context += "=== MESAJ ===\n\n";
   context += userMessage;
   context += "\n\n";
-  
+
   // 🔧 KISA talimat
   context += "💡 Kısa ve öz cevap ver. TÜRKÇE.\n";
-  
+
   return context;
 }
 
@@ -1293,17 +1399,17 @@ export function setUserPreferences(preferences: Partial<ConversationContext['use
 // Project context management
 export function updateProjectContext(projectPath: string, fileIndex: any[]) {
   const projectName = projectPath.split(/[\\/]/).pop() || 'Unknown';
-  
+
   // Detect project type
   const hasPackageJson = fileIndex.some(f => f.path.includes('package.json'));
   const hasCargoToml = fileIndex.some(f => f.path.includes('Cargo.toml'));
   const hasPyProject = fileIndex.some(f => f.path.includes('pyproject.toml'));
-  
+
   let projectType = 'unknown';
   if (hasPackageJson) projectType = 'javascript/typescript';
   else if (hasCargoToml) projectType = 'rust';
   else if (hasPyProject) projectType = 'python';
-  
+
   // Detect main languages
   const languages = new Set<string>();
   fileIndex.forEach(file => {
@@ -1322,7 +1428,7 @@ export function updateProjectContext(projectPath: string, fileIndex: any[]) {
       if (langMap[ext]) languages.add(langMap[ext]);
     }
   });
-  
+
   conversationContext.projectContext = {
     name: projectName,
     type: projectType,
@@ -1368,7 +1474,7 @@ AÇIKLAMA:
   try {
     const response = await sendToAI(enhancedPrompt, false);
     const parsed = parseAIResponse(response);
-    
+
     if (parsed.actions && parsed.actions.length > 0) { // ✅ FIXED: Added null check
       const action = parsed.actions[0];
       return {
@@ -1377,7 +1483,7 @@ AÇIKLAMA:
         filePath: action.filePath
       };
     }
-    
+
     return {
       code: '',
       explanation: response,
@@ -1452,11 +1558,11 @@ GÖREV: Bu kodu şu açılardan değerlendir:
 
   try {
     const response = await sendToAI(improvementPrompt, false);
-    
+
     // Parse response
     const suggestions: any[] = [];
     const suggestionPattern = /ÖNERI \d+:\s*-\s*Satır:\s*(\d+)\s*-\s*Tür:\s*(\w+)\s*-\s*Öncelik:\s*(\w+)\s*-\s*Öneri:\s*(.+?)(?=ÖNERI \d+:|ÖZET:|$)/gs;
-    
+
     let match;
     while ((match = suggestionPattern.exec(response)) !== null) {
       suggestions.push({
@@ -1466,10 +1572,10 @@ GÖREV: Bu kodu şu açılardan değerlendir:
         suggestion: match[4].trim()
       });
     }
-    
+
     const summaryMatch = response.match(/ÖZET:\s*(.+?)$/s);
     const summary = summaryMatch ? summaryMatch[1].trim() : "Kod analizi tamamlandı.";
-    
+
     return { suggestions, summary };
   } catch (error) {
     console.error('Code improvement suggestion error:', error);
@@ -1508,9 +1614,9 @@ KAPSAM LİSTESİ:
   try {
     const response = await sendToAI(testPrompt, false);
     const parsed = parseAIResponse(response);
-    
+
     const testCode = (parsed.actions && parsed.actions.length > 0) ? parsed.actions[0].content : ''; // ✅ FIXED
-    
+
     // Extract coverage list
     const coveragePattern = /-\s*(.+)/g;
     const coverage: string[] = [];
@@ -1518,7 +1624,7 @@ KAPSAM LİSTESİ:
     while ((match = coveragePattern.exec(response)) !== null) {
       coverage.push(match[1].trim());
     }
-    
+
     return { testCode, coverage };
   } catch (error) {
     console.error('Test generation error:', error);
@@ -1564,9 +1670,9 @@ DEĞİŞİKLİKLER:
   try {
     const response = await sendToAI(bugPrompt, false);
     const parsed = parseAIResponse(response);
-    
+
     const fixedCode = (parsed.actions && parsed.actions.length > 0) ? parsed.actions[0].content : ''; // ✅ FIXED
-    
+
     // Extract changes
     const changesPattern = /-\s*(.+)/g;
     const changesDescription: string[] = [];
@@ -1574,7 +1680,7 @@ DEĞİŞİKLİKLER:
     while ((match = changesPattern.exec(response)) !== null) {
       changesDescription.push(match[1].trim());
     }
-    
+
     return {
       fixedCode,
       explanation: parsed.explanation, // ✅ FIXED: Changed from 'message'
@@ -1634,7 +1740,7 @@ Markdown formatında yaz.`;
 
   try {
     const response = await sendToAI(docPrompt, false);
-    
+
     return {
       documentation: response,
       apiReference: extractAPIReference(response)
@@ -1694,25 +1800,25 @@ SORUNLAR:
 
   try {
     const response = await sendToAI(reviewPrompt, false);
-    
+
     // Parse response
     const scoreMatch = response.match(/SKOR:\s*(\d+)/i);
     const score = scoreMatch ? parseInt(scoreMatch[1]) : 75;
-    
+
     const issues: any[] = [];
     const issueMatches = response.matchAll(/Satır\s+(\d+):\s*\[([^\]]+)\]\s*-\s*(.+)/gi);
     for (const match of issueMatches) {
       issues.push({
         line: parseInt(match[1]),
-        type: match[2].toLowerCase().includes('error') ? 'error' : 
-              match[2].toLowerCase().includes('warning') ? 'warning' : 'suggestion',
+        type: match[2].toLowerCase().includes('error') ? 'error' :
+          match[2].toLowerCase().includes('warning') ? 'warning' : 'suggestion',
         message: match[3].trim(),
-        severity: match[2].toLowerCase().includes('critical') ? 'high' : 
-                  match[2].toLowerCase().includes('major') ? 'high' : 
-                  match[2].toLowerCase().includes('minor') ? 'low' : 'medium'
+        severity: match[2].toLowerCase().includes('critical') ? 'high' :
+          match[2].toLowerCase().includes('major') ? 'high' :
+            match[2].toLowerCase().includes('minor') ? 'low' : 'medium'
       });
     }
-    
+
     // Parse suggestions
     const suggestions: string[] = [];
     const suggestionSection = response.split(/ÖNERİLER:/i)[1]?.split(/ÖZET:/i)[0];
@@ -1722,10 +1828,10 @@ SORUNLAR:
         suggestions.push(...suggestionMatches.map(s => s.replace(/^-\s*/, '').trim()));
       }
     }
-    
+
     const summaryMatch = response.split(/ÖZET:/i)[1];
     const summary = summaryMatch ? summaryMatch.trim() : "Kod incelemesi tamamlandı.";
-    
+
     return { score, issues, suggestions, summary };
   } catch (error) {
     console.error('Code review error:', error);
@@ -1789,10 +1895,10 @@ FAYDA: [bu refactoring'in faydası]
 
   try {
     const response = await sendToAI(refactorPrompt, false);
-    
+
     const suggestions: any[] = [];
     const suggestionPattern = /ÖNERİ \d+:\s*TÜR:\s*(.+?)\s*AÇIKLAMA:\s*(.+?)\s*ÖNCE:\s*```[\w]*\s*(.+?)\s*```\s*SONRA:\s*```[\w]*\s*(.+?)\s*```\s*FAYDA:\s*(.+?)(?=ÖNERİ \d+:|ÖZET:|$)/gs;
-    
+
     let match;
     while ((match = suggestionPattern.exec(response)) !== null) {
       suggestions.push({
@@ -1803,10 +1909,10 @@ FAYDA: [bu refactoring'in faydası]
         benefit: match[5].trim()
       });
     }
-    
+
     const summaryMatch = response.match(/ÖZET:\s*(.+?)$/s);
     const summary = summaryMatch ? summaryMatch[1].trim() : "Refactoring analizi tamamlandı.";
-    
+
     return { suggestions, summary };
   } catch (error) {
     console.error('Refactoring suggestion error:', error);
@@ -1856,13 +1962,13 @@ AÇIKLAR:
 
   try {
     const response = await sendToAI(securityPrompt, false);
-    
+
     const scoreMatch = response.match(/GÜVENLIK SKORU:\s*(\d+)/i);
     const score = scoreMatch ? parseInt(scoreMatch[1]) : 80;
-    
+
     const vulnerabilities: any[] = [];
     const vulnMatches = response.matchAll(/Satır\s+(\d+):\s*([^-]+)\s*-\s*SEVERITY:\s*([^-]+)\s*-\s*([^-]+)\s*-\s*ÇÖZÜM:\s*(.+)/gi);
-    
+
     for (const match of vulnMatches) {
       vulnerabilities.push({
         line: parseInt(match[1]),
@@ -1872,10 +1978,10 @@ AÇIKLAR:
         solution: match[5].trim()
       });
     }
-    
+
     const summaryMatch = response.split(/ÖZET:/i)[1];
     const summary = summaryMatch ? summaryMatch.trim() : "Güvenlik taraması tamamlandı.";
-    
+
     return { vulnerabilities, score, summary };
   } catch (error) {
     console.error('Security scan error:', error);
@@ -1930,7 +2036,7 @@ GÖREV: Bu paketleri analiz et:
 
   try {
     const response = await sendToAI(packagePrompt, false);
-    
+
     // Parse outdated packages
     const outdated: any[] = [];
     const outdatedSection = response.split(/=== ESKİ PAKETLER ===/i)[1]?.split(/=== GÜVENLİK ===/i)[0];
@@ -1945,7 +2051,7 @@ GÖREV: Bu paketleri analiz et:
         });
       }
     }
-    
+
     // Parse security issues
     const security: any[] = [];
     const securitySection = response.split(/=== GÜVENLİK ===/i)[1]?.split(/=== ÖNERİLER ===/i)[0];
@@ -1959,7 +2065,7 @@ GÖREV: Bu paketleri analiz et:
         });
       }
     }
-    
+
     // Parse suggestions
     const suggestions: string[] = [];
     const suggestionSection = response.split(/=== ÖNERİLER ===/i)[1]?.split(/=== ÖZET ===/i)[0];
@@ -1969,10 +2075,10 @@ GÖREV: Bu paketleri analiz et:
         suggestions.push(...suggestionMatches.map(s => s.replace(/^-\s*/, '').trim()));
       }
     }
-    
+
     const summaryMatch = response.split(/=== ÖZET ===/i)[1];
     const summary = summaryMatch ? summaryMatch.trim() : "Paket analizi tamamlandı.";
-    
+
     return { outdated, security, suggestions, summary };
   } catch (error) {
     console.error('Package analysis error:', error);
@@ -2023,7 +2129,7 @@ GÖREV: Bu environment dosyasını analiz et:
 
   try {
     const response = await sendToAI(envPrompt, false);
-    
+
     // Parse missing variables
     const missing: string[] = [];
     const missingSection = response.split(/=== EKSİK DEĞİŞKENLER ===/i)[1]?.split(/=== GÜVENLİK SORUNLARI ===/i)[0];
@@ -2033,7 +2139,7 @@ GÖREV: Bu environment dosyasını analiz et:
         missing.push(...missingMatches.map(s => s.replace(/^-\s*/, '').trim()));
       }
     }
-    
+
     // Parse security issues
     const insecure: any[] = [];
     const securitySection = response.split(/=== GÜVENLİK SORUNLARI ===/i)[1]?.split(/=== ÖNERİLER ===/i)[0];
@@ -2047,7 +2153,7 @@ GÖREV: Bu environment dosyasını analiz et:
         });
       }
     }
-    
+
     // Parse suggestions
     const suggestions: string[] = [];
     const suggestionSection = response.split(/=== ÖNERİLER ===/i)[1]?.split(/=== ŞABLON ===/i)[0];
@@ -2057,10 +2163,10 @@ GÖREV: Bu environment dosyasını analiz et:
         suggestions.push(...suggestionMatches.map(s => s.replace(/^-\s*/, '').trim()));
       }
     }
-    
+
     const templateMatch = response.split(/=== ŞABLON ===/i)[1];
     const template = templateMatch ? templateMatch.trim() : '';
-    
+
     return { missing, insecure, suggestions, template };
   } catch (error) {
     console.error('Environment analysis error:', error);
@@ -2070,5 +2176,193 @@ GÖREV: Bu environment dosyasını analiz et:
       suggestions: ['Environment analizi sırasında hata oluştu.'],
       template: ''
     };
+  }
+}
+
+// ============================================================
+// PANEL ADAPTER FUNCTIONS — EnhancedAIPanel için doğru format
+// ============================================================
+
+/**
+ * EnhancedAIPanel → Documentation sekmesi adapter.
+ * AI'dan readme, apiDocs, comments formatında döner.
+ */
+export async function generateDocumentationForPanel(
+  filePath: string,
+  code: string
+): Promise<{ readme: string; apiDocs: string; comments: string }> {
+  const ext = getFileExtension(filePath);
+  const fileName = filePath.split(/[/\\]/).pop() || filePath;
+
+  const prompt = `Sen bir teknik yazar ve kıdemli yazılım mühendisisin.
+Aşağıdaki kodu üç bölümde belgele. TÜRKÇE yaz.
+
+DOSYA: ${fileName}
+\`\`\`${ext}
+${code.substring(0, 6000)}
+\`\`\`
+
+=== README BÖLÜMÜ ===
+Bu dosya/modül için README yaz (ne yapar, nasıl kullanılır, örnek).
+
+=== API REFERANS BÖLÜMÜ ===
+Her export edilen fonksiyon/class/interface için:
+- İmza, parametreler, dönüş değeri, kısa açıklama.
+
+=== KOD YORUMU BÖLÜMÜ ===
+Önemli satırlar için JSDoc/yorum önerileri. Format:
+// Satır X: [yorum önerisi]`;
+
+  try {
+    const response = await sendToAI(prompt, false);
+    const readmeMatch = response.split(/=== README BÖLÜMÜ ===/i)[1]?.split(/=== API REFERANS BÖLÜMÜ ===/i)[0];
+    const apiMatch = response.split(/=== API REFERANS BÖLÜMÜ ===/i)[1]?.split(/=== KOD YORUMU BÖLÜMÜ ===/i)[0];
+    const commentsMatch = response.split(/=== KOD YORUMU BÖLÜMÜ ===/i)[1];
+    return {
+      readme: readmeMatch?.trim() || response.substring(0, 1000),
+      apiDocs: apiMatch?.trim() || 'API referansı üretilemedi.',
+      comments: commentsMatch?.trim() || 'Yorumlar üretilemedi.'
+    };
+  } catch (error) {
+    console.error('Panel documentation error:', error);
+    return { readme: 'Dokümantasyon oluşturulamadı: ' + String(error), apiDocs: '', comments: '' };
+  }
+}
+
+/**
+ * EnhancedAIPanel → Test Generator sekmesi adapter.
+ * AI'dan unitTests, integrationTests, testPlan formatında döner.
+ */
+export async function generateTestsForPanel(
+  filePath: string,
+  code: string
+): Promise<{ unitTests: string; integrationTests: string; testPlan: string }> {
+  const ext = getFileExtension(filePath);
+  const fileName = filePath.split(/[/\\]/).pop() || filePath;
+
+  const prompt = `Sen bir test mühendisisin. Aşağıdaki kod için kapsamlı testler yaz.
+Framework: Jest/Vitest. TÜRKÇE açıklama, kod İngilizce.
+
+DOSYA: ${fileName}
+\`\`\`${ext}
+${code.substring(0, 5000)}
+\`\`\`
+
+=== UNIT TEST KODU ===
+Her fonksiyon için ayrı test. Tam çalışan kod:
+
+\`\`\`typescript
+// unit testler buraya
+\`\`\`
+
+=== INTEGRATION TEST KODU ===
+Modüller arası etkileşim testleri:
+
+\`\`\`typescript
+// integration testler buraya
+\`\`\`
+
+=== TEST PLANI ===
+- Kapsanan senaryolar
+- Edge case'ler
+- Mock'lanması gereken bağımlılıklar`;
+
+  try {
+    const response = await sendToAI(prompt, false);
+
+    const extractCode = (section: string | undefined): string => {
+      if (!section) return '';
+      const m = section.match(/```(?:typescript|javascript|ts|js)?\n([\s\S]+?)```/);
+      return m ? m[1].trim() : section.replace(/```[\w]*/g, '').trim().substring(0, 1200);
+    };
+
+    const unitSection = response.split(/=== UNIT TEST KODU ===/i)[1]?.split(/=== INTEGRATION TEST KODU ===/i)[0];
+    const integSection = response.split(/=== INTEGRATION TEST KODU ===/i)[1]?.split(/=== TEST PLANI ===/i)[0];
+    const planSection = response.split(/=== TEST PLANI ===/i)[1];
+
+    return {
+      unitTests: extractCode(unitSection) || 'Unit test üretilemedi.',
+      integrationTests: extractCode(integSection) || 'Integration test üretilemedi.',
+      testPlan: planSection?.trim() || '- AI tarafından test planı oluşturuldu.'
+    };
+  } catch (error) {
+    console.error('Panel test generation error:', error);
+    return { unitTests: 'Test oluşturulamadı: ' + String(error), integrationTests: '', testPlan: '' };
+  }
+}
+
+/**
+ * EnhancedAIPanel → Refactoring sekmesi adapter.
+ * AI'dan impact/type/description/before/after formatında döner.
+ */
+export async function suggestRefactoringForPanel(
+  filePath: string,
+  code: string
+): Promise<{
+  suggestions: Array<{ impact: 'high' | 'medium' | 'low'; type: string; description: string; before: string; after: string }>;
+  summary: string;
+}> {
+  const ext = getFileExtension(filePath);
+  const fileName = filePath.split(/[/\\]/).pop() || filePath;
+
+  const prompt = `Sen bir refactoring uzmanısın. Kodu incele ve somut öneriler sun. TÜRKÇE.
+
+DOSYA: ${fileName}
+\`\`\`${ext}
+${code.substring(0, 5000)}
+\`\`\`
+
+Her öneri için:
+
+=== ÖNERİ ===
+ETKİ: high|medium|low
+TÜR: [Extract Function / Remove Duplication / Apply Pattern / vb.]
+AÇIKLAMA: [ne yapılmalı ve neden]
+ÖNCE:
+\`\`\`${ext}
+[mevcut problematik kod parçası]
+\`\`\`
+SONRA:
+\`\`\`${ext}
+[düzeltilmiş kod]
+\`\`\`
+
+=== ÖZET ===
+[Genel değerlendirme]`;
+
+  try {
+    const response = await sendToAI(prompt, false);
+    const suggestions: Array<{ impact: 'high' | 'medium' | 'low'; type: string; description: string; before: string; after: string }> = [];
+
+    const blocks = response.split(/=== ÖNERİ ===/i).slice(1);
+    for (const block of blocks) {
+      const impactMatch = block.match(/ETKİ:\s*(high|medium|low)/i);
+      const typeMatch = block.match(/TÜR:\s*(.+)/i);
+      const descMatch = block.match(/AÇIKLAMA:\s*(.+)/i);
+      const codeBlocks: string[] = [];
+      const cbRegex = /```(?:\w+)?\n([\s\S]+?)```/g;
+      let cbMatch;
+      while ((cbMatch = cbRegex.exec(block)) !== null) codeBlocks.push(cbMatch[1].trim());
+
+      if (typeMatch) {
+        suggestions.push({
+          impact: (impactMatch?.[1]?.toLowerCase() as 'high' | 'medium' | 'low') || 'medium',
+          type: typeMatch[1].trim(),
+          description: descMatch?.[1]?.trim() || 'Refactoring önerisi',
+          before: codeBlocks[0] || '',
+          after: codeBlocks[1] || ''
+        });
+      }
+    }
+
+    if (suggestions.length === 0) {
+      suggestions.push({ impact: 'medium', type: 'Genel İyileştirme', description: response.substring(0, 500), before: '', after: '' });
+    }
+
+    const summaryMatch = response.split(/=== ÖZET ===/i)[1];
+    return { suggestions, summary: summaryMatch?.trim() || 'Refactoring analizi tamamlandı.' };
+  } catch (error) {
+    console.error('Panel refactoring error:', error);
+    return { suggestions: [], summary: 'Refactoring analizi tamamlanamadı: ' + String(error) };
   }
 }

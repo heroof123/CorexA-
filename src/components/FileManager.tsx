@@ -124,14 +124,14 @@ export default function FileManager({
     if (!showCreateDialog) return;
 
     const fullPath = `${showCreateDialog.parentPath}/${name}`;
-    
+
     try {
       if (type === 'folder') {
         await invoke('create_directory', { path: fullPath });
       } else {
         await invoke('write_file', { path: fullPath, content: '' });
       }
-      
+
       onFileCreate(fullPath);
       setShowCreateDialog(null);
       onRefresh();
@@ -180,7 +180,7 @@ export default function FileManager({
 
   const handleDrop = async (e: React.DragEvent, targetPath: string) => {
     e.preventDefault();
-    
+
     if (!draggedFile) return;
 
     const fileName = draggedFile.split('/').pop();
@@ -220,9 +220,8 @@ export default function FileManager({
     return (
       <div key={node.path}>
         <div
-          className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-[var(--color-hover)] ${
-            isSelected ? 'bg-[var(--color-primary)] text-white' : ''
-          }`}
+          className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-[var(--color-hover)] ${isSelected ? 'bg-[var(--color-primary)] text-white' : ''
+            }`}
           style={{ paddingLeft: `${depth * 16 + 8}px` }}
           onClick={() => !node.isDirectory && onFileSelect(node.path)}
           onContextMenu={(e) => handleContextMenu(e, node)}
@@ -242,17 +241,17 @@ export default function FileManager({
               {node.isExpanded ? '📂' : '📁'}
             </button>
           )}
-          
+
           {!node.isDirectory && (
             <span className="w-4 h-4 flex items-center justify-center text-xs">
               {node.name.endsWith('.ts') || node.name.endsWith('.tsx') ? '🟦' :
-               node.name.endsWith('.js') || node.name.endsWith('.jsx') ? '🟨' :
-               node.name.endsWith('.rs') ? '🦀' :
-               node.name.endsWith('.py') ? '🐍' :
-               node.name.endsWith('.json') ? '📋' :
-               node.name.endsWith('.md') ? '📝' :
-               node.name.endsWith('.css') ? '🎨' :
-               node.name.endsWith('.html') ? '🌐' : '📄'}
+                node.name.endsWith('.js') || node.name.endsWith('.jsx') ? '🟨' :
+                  node.name.endsWith('.rs') ? '🦀' :
+                    node.name.endsWith('.py') ? '🐍' :
+                      node.name.endsWith('.json') ? '📋' :
+                        node.name.endsWith('.md') ? '📝' :
+                          node.name.endsWith('.css') ? '🎨' :
+                            node.name.endsWith('.html') ? '🌐' : '📄'}
             </span>
           )}
 
@@ -326,6 +325,13 @@ export default function FileManager({
             >
               🔄
             </button>
+            <button
+              onClick={() => invoke('open_new_window', { path: 'index.html' }).catch(console.error)}
+              className="w-6 h-6 flex items-center justify-center hover:bg-[var(--color-hover)] rounded text-xs"
+              title="Yeni Pencere"
+            >
+              🪟
+            </button>
           </div>
         </div>
 
@@ -350,9 +356,8 @@ export default function FileManager({
             {filteredFiles.map(file => (
               <div
                 key={file}
-                className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-[var(--color-hover)] rounded ${
-                  selectedFile === file ? 'bg-[var(--color-primary)] text-white' : ''
-                }`}
+                className={`flex items-center gap-2 px-2 py-1 cursor-pointer hover:bg-[var(--color-hover)] rounded ${selectedFile === file ? 'bg-[var(--color-primary)] text-white' : ''
+                  }`}
                 onClick={() => onFileSelect(file)}
               >
                 <span className="text-xs">📄</span>
@@ -411,8 +416,8 @@ export default function FileManager({
             <div className="border-t border-[var(--color-border)] my-1" />
             <button
               onClick={() => {
-                setShowCreateDialog({ 
-                  type: 'file', 
+                setShowCreateDialog({
+                  type: 'file',
                   parentPath: contextMenu.node.isDirectory ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))
                 });
                 setContextMenu(null);
@@ -423,8 +428,8 @@ export default function FileManager({
             </button>
             <button
               onClick={() => {
-                setShowCreateDialog({ 
-                  type: 'folder', 
+                setShowCreateDialog({
+                  type: 'folder',
                   parentPath: contextMenu.node.isDirectory ? contextMenu.node.path : contextMenu.node.path.substring(0, contextMenu.node.path.lastIndexOf('/'))
                 });
                 setContextMenu(null);
@@ -432,6 +437,16 @@ export default function FileManager({
               className="block w-full text-left px-3 py-1 text-xs hover:bg-[var(--color-hover)]"
             >
               📁 Yeni Klasör
+            </button>
+            <div className="border-t border-[var(--color-border)] my-1" />
+            <button
+              onClick={() => {
+                invoke('open_new_window', { path: 'index.html' }).catch(console.error);
+                setContextMenu(null);
+              }}
+              className="block w-full text-left px-3 py-1 text-xs hover:bg-[var(--color-hover)]"
+            >
+              🪟 Yeni Pencere
             </button>
           </div>
         </>

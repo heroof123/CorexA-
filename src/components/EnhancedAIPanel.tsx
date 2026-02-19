@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { 
-  performCodeReview, 
-  generateDocumentation, 
-  generateTests, 
-  suggestRefactoring,
+import {
+  performCodeReview,
+  generateDocumentationForPanel,
+  generateTestsForPanel,
+  suggestRefactoringForPanel,
   scanSecurity,
   analyzePackages,
   analyzeEnvironment
 } from '../services/ai';
+
 
 interface EnhancedAIPanelProps {
   selectedFile: string;
@@ -85,19 +86,19 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
 
     try {
       let result;
-      
+
       switch (tool) {
         case 'review':
           result = await performCodeReview(selectedFile, fileContent);
           break;
         case 'docs':
-          result = await generateDocumentation(selectedFile, fileContent);
+          result = await generateDocumentationForPanel(selectedFile, fileContent);
           break;
         case 'tests':
-          result = await generateTests(selectedFile, fileContent);
+          result = await generateTestsForPanel(selectedFile, fileContent);
           break;
         case 'refactor':
-          result = await suggestRefactoring(selectedFile, fileContent);
+          result = await suggestRefactoringForPanel(selectedFile, fileContent);
           break;
         case 'security':
           result = await scanSecurity(selectedFile, fileContent);
@@ -144,7 +145,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
               </div>
               <p className="text-sm text-[var(--color-textSecondary)]">Kod Kalitesi Puanı</p>
             </div>
-            
+
             {results.issues.length > 0 && (
               <div>
                 <h4 className="font-semibold mb-2">🐛 Sorunlar ({results.issues.length})</h4>
@@ -153,11 +154,10 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                     <div key={index} className="p-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-mono">Satır {issue.line}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs ${
-                          issue.severity === 'high' ? 'bg-red-500 text-white' :
+                        <span className={`px-1.5 py-0.5 rounded text-xs ${issue.severity === 'high' ? 'bg-red-500 text-white' :
                           issue.severity === 'medium' ? 'bg-yellow-500 text-white' :
-                          'bg-blue-500 text-white'
-                        }`}>
+                            'bg-blue-500 text-white'
+                          }`}>
                           {issue.severity}
                         </span>
                       </div>
@@ -167,7 +167,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 </div>
               </div>
             )}
-            
+
             <div>
               <h4 className="font-semibold mb-2">📋 Özet</h4>
               <p className="text-sm">{results.summary}</p>
@@ -184,14 +184,14 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 <pre className="text-sm whitespace-pre-wrap overflow-auto max-h-32">{results.readme}</pre>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-2">📚 API Docs</h4>
               <div className="p-3 bg-[var(--color-background)] border border-[var(--color-border)] rounded">
                 <pre className="text-sm whitespace-pre-wrap overflow-auto max-h-32">{results.apiDocs}</pre>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-2">💬 Yorum Önerileri</h4>
               <div className="p-3 bg-[var(--color-background)] border border-[var(--color-border)] rounded">
@@ -210,14 +210,14 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 <pre className="text-sm font-mono whitespace-pre-wrap overflow-auto max-h-40">{results.unitTests}</pre>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-2">🔗 Integration Tests</h4>
               <div className="p-3 bg-[var(--color-background)] border border-[var(--color-border)] rounded">
                 <pre className="text-sm font-mono whitespace-pre-wrap overflow-auto max-h-40">{results.integrationTests}</pre>
               </div>
             </div>
-            
+
             <div>
               <h4 className="font-semibold mb-2">📋 Test Planı</h4>
               <div className="p-3 bg-[var(--color-background)] border border-[var(--color-border)] rounded">
@@ -234,7 +234,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
               <h4 className="font-semibold mb-2">📋 Özet</h4>
               <p className="text-sm">{results.summary}</p>
             </div>
-            
+
             {results.suggestions.length > 0 && (
               <div>
                 <h4 className="font-semibold mb-2">🔧 Refactoring Önerileri ({results.suggestions.length})</h4>
@@ -242,11 +242,10 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                   {results.suggestions.map((suggestion: any, index: number) => (
                     <div key={index} className="p-3 bg-[var(--color-background)] border border-[var(--color-border)] rounded">
                       <div className="flex items-center gap-2 mb-2">
-                        <span className={`px-2 py-1 rounded text-xs text-white ${
-                          suggestion.impact === 'high' ? 'bg-red-500' :
+                        <span className={`px-2 py-1 rounded text-xs text-white ${suggestion.impact === 'high' ? 'bg-red-500' :
                           suggestion.impact === 'medium' ? 'bg-yellow-500' :
-                          'bg-green-500'
-                        }`}>
+                            'bg-green-500'
+                          }`}>
                           {suggestion.impact} impact
                         </span>
                         <span className="text-sm font-medium">{suggestion.type}</span>
@@ -281,7 +280,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
               </div>
               <p className="text-sm text-[var(--color-textSecondary)]">Güvenlik Puanı</p>
             </div>
-            
+
             {results.vulnerabilities.length > 0 && (
               <div>
                 <h4 className="font-semibold mb-2">🚨 Güvenlik Açıkları ({results.vulnerabilities.length})</h4>
@@ -290,12 +289,11 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                     <div key={index} className="p-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-mono">Satır {vuln.line}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs text-white ${
-                          vuln.severity === 'critical' ? 'bg-red-600' :
+                        <span className={`px-1.5 py-0.5 rounded text-xs text-white ${vuln.severity === 'critical' ? 'bg-red-600' :
                           vuln.severity === 'high' ? 'bg-red-500' :
-                          vuln.severity === 'medium' ? 'bg-yellow-500' :
-                          'bg-blue-500'
-                        }`}>
+                            vuln.severity === 'medium' ? 'bg-yellow-500' :
+                              'bg-blue-500'
+                          }`}>
                           {vuln.severity}
                         </span>
                         <span className="text-xs bg-gray-200 px-1.5 py-0.5 rounded">{vuln.type}</span>
@@ -307,7 +305,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 </div>
               </div>
             )}
-            
+
             <div>
               <h4 className="font-semibold mb-2">📋 Özet</h4>
               <p className="text-sm">{results.summary}</p>
@@ -326,11 +324,10 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                     <div key={index} className="flex items-center justify-between p-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm">
                       <span className="font-mono">{pkg.name}</span>
                       <span>{pkg.current} → {pkg.latest}</span>
-                      <span className={`px-1.5 py-0.5 rounded text-xs ${
-                        pkg.type === 'major' ? 'bg-red-500 text-white' :
+                      <span className={`px-1.5 py-0.5 rounded text-xs ${pkg.type === 'major' ? 'bg-red-500 text-white' :
                         pkg.type === 'minor' ? 'bg-yellow-500 text-white' :
-                        'bg-green-500 text-white'
-                      }`}>
+                          'bg-green-500 text-white'
+                        }`}>
                         {pkg.type}
                       </span>
                     </div>
@@ -338,7 +335,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 </div>
               </div>
             )}
-            
+
             {results.security.length > 0 && (
               <div>
                 <h4 className="font-semibold mb-2">🚨 Güvenlik Sorunları ({results.security.length})</h4>
@@ -347,12 +344,11 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                     <div key={index} className="p-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-mono">{issue.name}</span>
-                        <span className={`px-1.5 py-0.5 rounded text-xs text-white ${
-                          issue.severity === 'critical' ? 'bg-red-600' :
+                        <span className={`px-1.5 py-0.5 rounded text-xs text-white ${issue.severity === 'critical' ? 'bg-red-600' :
                           issue.severity === 'high' ? 'bg-red-500' :
-                          issue.severity === 'medium' ? 'bg-yellow-500' :
-                          'bg-blue-500'
-                        }`}>
+                            issue.severity === 'medium' ? 'bg-yellow-500' :
+                              'bg-blue-500'
+                          }`}>
                           {issue.severity}
                         </span>
                       </div>
@@ -362,7 +358,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 </div>
               </div>
             )}
-            
+
             <div>
               <h4 className="font-semibold mb-2">📋 Özet</h4>
               <p className="text-sm">{results.summary}</p>
@@ -385,7 +381,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 </div>
               </div>
             )}
-            
+
             {results.insecure.length > 0 && (
               <div>
                 <h4 className="font-semibold mb-2">🚨 Güvenlik Sorunları ({results.insecure.length})</h4>
@@ -400,7 +396,7 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 </div>
               </div>
             )}
-            
+
             {results.template && (
               <div>
                 <h4 className="font-semibold mb-2">📄 .env.example Şablonu</h4>
@@ -439,11 +435,10 @@ export default function EnhancedAIPanel({ selectedFile, fileContent, onClose }: 
                 <button
                   key={tool.id}
                   onClick={() => setActiveTool(tool.id)}
-                  className={`w-full p-3 rounded-lg text-left transition-colors ${
-                    activeTool === tool.id
-                      ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30'
-                      : 'hover:bg-[var(--color-hover)] border border-transparent'
-                  }`}
+                  className={`w-full p-3 rounded-lg text-left transition-colors ${activeTool === tool.id
+                    ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)] border border-[var(--color-primary)]/30'
+                    : 'hover:bg-[var(--color-hover)] border border-transparent'
+                    }`}
                 >
                   <div className="flex items-center gap-3 mb-1">
                     <span className="text-xl">{tool.icon}</span>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { useTheme } from '../contexts/ThemeContext';
+import { backgroundReasoner } from '../services/backgroundReasoner';
 
 interface StatusBarProps {
   projectPath: string;
@@ -22,6 +23,10 @@ export default function StatusBar({
   const [encoding] = useState('UTF-8');
   const [lineEnding] = useState('LF');
   const [language, setLanguage] = useState('');
+  
+  // 🆕 TASK 23.3: Background analysis progress
+  const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [analysisQueue, setAnalysisQueue] = useState(0);
 
   // Detect file language from extension
   useEffect(() => {
@@ -58,6 +63,34 @@ export default function StatusBar({
       setGitStatus(hasUnsavedChanges ? 'modified' : 'clean');
     }
   }, [projectPath, hasUnsavedChanges]);
+
+  // 🆕 TASK 23.3: Subscribe to background analysis events
+  useEffect(() => {
+    const handleAnalysisStart = () => {
+      setIsAnalyzing(true);
+    };
+
+    const handleAnalysisComplete = () => {
+      setIsAnalyzing(false);
+    };
+
+    // Subscribe to events
+    backgroundReasoner.on('analysis-start', handleAnalysisStart);
+    backgroundReasoner.on('analysis-complete', handleAnalysisComplete);
+
+    // Update queue size periodically
+    const interval = setInterval(() => {
+      const stats = backgroundReasoner.getStats();
+      setAnalysisQueue(stats.queueLength);
+      setIsAnalyzing(stats.isRunning);
+    }, 500);
+
+    return () => {
+      backgroundReasoner.off('analysis-start', handleAnalysisStart);
+      backgroundReasoner.off('analysis-complete', handleAnalysisComplete);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Calculate file stats
   const lineCount = fileContent ? fileContent.split('\n').length : 0;
@@ -108,6 +141,18 @@ export default function StatusBar({
 
       {/* Right side - File info and cursor position */}
       <div className="flex items-center gap-4">
+        {/* 🆕 TASK 23.3: Background analysis indicator */}
+        {(isAnalyzing || analysisQueue > 0) && (
+          <div className="flex items-center gap-2 text-blue-400">
+            <div className="w-3 h-3 relative">
+              <div className="absolute inset-0 border-2 border-blue-400 border-t-transparent rounded-full animate-spin"></div>
+            </div>
+            <span className="text-xs">
+              {isAnalyzing ? 'Analyzing...' : `${analysisQueue} queued`}
+            </span>
+          </div>
+        )}
+        
         {selectedFile && (
           <>
             <span>{language}</span>

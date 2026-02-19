@@ -10,25 +10,29 @@ use log::{info, error, warn};
 use tauri::State;
 use serde_json::json;
 use base64::{Engine as _, engine::general_purpose}; // 🆕 Base64 decoding
+use rand::Rng; // 🆕 Random number generation for sampling
+
+use std::collections::HashMap;
 
 // State structure
-pub struct GgufState {
-    pub backend: Option<LlamaBackend>,
-    pub model: Option<LlamaModel>,
-    pub model_path: Option<String>,
+pub struct LoadedModel {
+    pub model: LlamaModel,
+    pub model_path: String,
     pub n_ctx: u32,
     pub n_gpu_layers: u32,
-    pub backend_initialized: bool, // Track if backend is initialized
+}
+
+pub struct GgufState {
+    pub backend: Option<LlamaBackend>,
+    pub models: HashMap<String, LoadedModel>, // Model path -> Model info
+    pub backend_initialized: bool,
 }
 
 impl Default for GgufState {
     fn default() -> Self {
         Self {
             backend: None,
-            model: None,
-            model_path: None,
-            n_ctx: 4096,
-            n_gpu_layers: 0,
+            models: HashMap::new(),
             backend_initialized: false,
         }
     }
@@ -45,9 +49,31 @@ pub async fn load_gguf_model(
     info!("🔵 GGUF model loading: {}", model_path);
     info!("📊 Context: {}, GPU Layers: {}", n_ctx, n_gpu_layers);
     
+    // Split GGUF dosyalari icin ilk parcaya yonlendir
+    // Ornek: model-00003-of-00004.gguf -> model-00001-of-00004.gguf
+    let model_path = resolve_split_gguf_path(&model_path);
+    info!("📂 Resolved model path: {}", model_path);
+    
     if !Path::new(&model_path).exists() {
         error!("❌ Model file not found: {}", model_path);
-        return Err(format!("Model file not found: {}", model_path));
+        return Err(format!("Model dosyası bulunamadı: {}", model_path));
+    }
+    
+    // Model dosyası boyutunu kontrol et
+    let metadata = std::fs::metadata(&model_path)
+        .map_err(|e| format!("Model dosyası okunamadı: {}", e))?;
+    let file_size_mb = metadata.len() / (1024 * 1024);
+    info!("📦 Model dosyası boyutu: {} MB", file_size_mb);
+    
+    if file_size_mb < 10 {
+        // Split GGUF parcalari kucuk olabilir, kontrol et
+        let is_split = regex::Regex::new(r"-\d{5}-of-\d{5}\.gguf$")
+            .map(|re| re.is_match(&model_path))
+            .unwrap_or(false);
+        if !is_split {
+            error!("❌ Model dosyası çok küçük ({}MB), bozuk olabilir", file_size_mb);
+            return Err(format!("Model dosyası çok küçük ({}MB), muhtemelen bozuk veya eksik indirilmiş. Lütfen modeli yeniden indirin.", file_size_mb));
+        }
     }
 
     let mut state_guard = state.lock().unwrap();
@@ -98,38 +124,89 @@ pub async fn load_gguf_model(
     info!("🔄 Loading model to GPU... (this may take a while)");
     info!("📋 Model params: n_gpu_layers={}", n_gpu_layers);
 
-    let model = LlamaModel::load_from_file(backend, &model_path, &model_params)
-        .map_err(|e| {
-            error!("❌ Model load failed: {:?}", e);
-            format!("Model load failed: {:?}", e)
-        })?;
+    // 🆕 2025 Güncelleme: GPU/boyut kısıtlamaları kaldırıldı
+    // Tüm GGUF modelleri yüklenmeye çalışılır
+    // Bellek yetersiz ise CPU'ya otomatik fallback yapılır
+    
+    let mut final_gpu_layers = n_gpu_layers;
+    let model = match LlamaModel::load_from_file(backend, &model_path, &model_params) {
+        Ok(m) => m,
+        Err(e) => {
+            error!("❌ GPU yükleme başarısız: {:?}", e);
+            
+            let error_msg = format!("{:?}", e);
+            
+            // Bellek yetersiz ise CPU'ya fallback yap
+            if error_msg.contains("OutOfMemory") || error_msg.contains("memory") {
+                warn!("⚠️ Bellek yetersiz - CPU moduna geçiliyor (GPU layers = 0)");
+                
+                final_gpu_layers = 0; // CPU'ya geç
+                let cpu_model_params = LlamaModelParams::default()
+                    .with_n_gpu_layers(0); // CPU-only
+                
+                match LlamaModel::load_from_file(backend, &model_path, &cpu_model_params) {
+                    Ok(m) => {
+                        info!("✅ Model CPU'da başarıyla yüklendi");
+                        m
+                    },
+                    Err(cpu_err) => {
+                        // CPU yükleme de başarısız - tüm hatayı ver
+                        error!("❌ CPU yükleme de başarısız: {:?}", cpu_err);
+                        return Err(format!(
+                            "Model yüklenemedi:\n\
+                            - GPU hatası: {:?}\n\
+                            - CPU hatası: {:?}\n\n\
+                            Lütfen:\n\
+                            1. Model dosyasının geçerli olduğundan emin olun\n\
+                            2. Modeli yeniden indirmeyi deneyin\n\
+                            3. Context length'i azaltmayı deneyin",
+                            e, cpu_err
+                        ));
+                    }
+                }
+            } else {
+                // Bellek dışı hata - tam bilgi ver
+                return Err(format!(
+                    "Model yükleme hatası: {:?}\n\n\
+                    Lütfen:\n\
+                    1. Model dosyasının geçerli olduğundan emin olun\n\
+                    2. Modeli yeniden indirmeyi deneyin\n\
+                    3. Sistem kaynaklarını kontrol edin (RAM/GPU)",
+                    e
+                ));
+            }
+        }
+    };
 
     info!("✅ Model loaded successfully!");
     info!("📦 Model: {}", model_path);
-    info!("🎮 GPU Layers: {}", n_gpu_layers);
+    info!("🎮 GPU Layers: {}", final_gpu_layers);
     info!("📝 Context: {}", n_ctx);
     
     // GPU kullanımını kontrol et
-    if n_gpu_layers > 0 {
+    if final_gpu_layers > 0 {
         info!("✅ GPU offload aktif - Model GPU'da çalışmalı");
     } else {
         info!("⚠️ GPU offload kapalı - Model CPU'da çalışacak");
     }
 
-    // Save model to state
-    state_guard.model = Some(model);
-    state_guard.model_path = Some(model_path.clone());
-    state_guard.n_ctx = n_ctx;
-    state_guard.n_gpu_layers = n_gpu_layers;
+    // Save model to state pool
+    state_guard.models.insert(model_path.clone(), LoadedModel {
+        model,
+        model_path: model_path.clone(),
+        n_ctx,
+        n_gpu_layers: final_gpu_layers,
+    });
     
-    info!("✅ Model saved to Tauri state!");
+    info!("✅ Model saved to pool! Total models: {}", state_guard.models.len());
 
-    Ok(format!("✅ Model loaded to GPU: {}", model_path))
+    Ok(format!("✅ Model başarıyla yüklendi: {}", model_path))
 }
 
 #[tauri::command]
 pub async fn chat_with_gguf_model(
     state: State<'_, Arc<Mutex<GgufState>>>,
+    model_path: String, // 🆕 Model path required
     prompt: String,
     max_tokens: u32,
     temperature: f32,
@@ -147,19 +224,18 @@ pub async fn chat_with_gguf_model(
         }
     };
     
-    // Check if model is loaded
-    if state_guard.model.is_none() {
-        error!("❌ Model not loaded! Call load_gguf_model first.");
-        return Err("❌ Model not loaded! Please load a model first.".to_string());
-    }
+    // 🆕 Get model from pool
+    let loaded_model = state_guard.models.get(&model_path)
+        .ok_or_else(|| {
+            error!("❌ Model not found in pool: {}", model_path);
+            format!("Model havuzda bulunamadı: {}", model_path)
+        })?;
 
     let backend = state_guard.backend.as_ref().unwrap();
-    let model = state_guard.model.as_ref().unwrap();
-    let n_ctx = state_guard.n_ctx;
+    let model = &loaded_model.model;
+    let n_ctx = loaded_model.n_ctx;
 
-    if let Some(path) = &state_guard.model_path {
-        info!("📦 Using model: {}", path);
-    }
+    info!("📦 Using model from pool: {}", model_path);
 
     // Create context with proper KV cache size
     // KV cache should be at least n_ctx + max_tokens to avoid NoKvCacheSlot error
@@ -260,26 +336,58 @@ pub async fn chat_with_gguf_model(
     }
 
     // Token generation
-    let mut response_tokens = Vec::new(); // 🆕 Token'ları biriktir
+    let mut response_tokens = Vec::new();
     let mut n_cur = batch.n_tokens();
     
     info!("🎲 Starting token generation...");
 
     for i in 0..max_tokens {
-        // Get candidates and apply sampling
+        // Get candidates
         let candidates = context.candidates();
         
-        // Convert to vector and sort by probability
+        // 🆕 Basit sampling - sadece temperature uygula
         let candidates_vec: Vec<_> = candidates.into_iter().collect();
         
-        // Get the token with highest probability (not just first)
-        let new_token_id = if let Some(best) = candidates_vec.iter().max_by(|a, b| {
-            a.logit().partial_cmp(&b.logit()).unwrap_or(std::cmp::Ordering::Equal)
-        }) {
-            best.id()
+        // Temperature-based sampling
+        let new_token_id = if temperature > 0.0 && temperature != 1.0 {
+            // Apply temperature scaling to logits
+            let scaled_logits: Vec<_> = candidates_vec.iter()
+                .map(|c| (c.id(), c.logit() / temperature))
+                .collect();
+            
+            // Convert to probabilities using softmax
+            let max_logit = scaled_logits.iter()
+                .map(|(_, logit)| logit)
+                .fold(f32::NEG_INFINITY, |a, &b| a.max(b));
+            
+            let exp_sum: f32 = scaled_logits.iter()
+                .map(|(_, logit)| (logit - max_logit).exp())
+                .sum();
+            
+            let probs: Vec<_> = scaled_logits.iter()
+                .map(|(id, logit)| (*id, (logit - max_logit).exp() / exp_sum))
+                .collect();
+            
+            // Sample from distribution
+            let mut rng = rand::thread_rng();
+            let random_val: f32 = rng.gen();
+            let mut cumulative = 0.0;
+            
+            let mut selected_id = probs[0].0;
+            for (id, prob) in probs.iter() {
+                cumulative += prob;
+                if random_val <= cumulative {
+                    selected_id = *id;
+                    break;
+                }
+            }
+            selected_id
         } else {
-            info!("⚠️ No candidates found, stopping at token {}", i);
-            break;
+            // No temperature, just pick highest probability
+            candidates_vec.iter()
+                .max_by(|a, b| a.logit().partial_cmp(&b.logit()).unwrap_or(std::cmp::Ordering::Equal))
+                .map(|c| c.id())
+                .unwrap_or(candidates_vec[0].id())
         };
 
         // Check for EOS (End of Sequence)
@@ -288,13 +396,11 @@ pub async fn chat_with_gguf_model(
             break;
         }
 
-        // 🆕 Token'ı listeye ekle (decode etme, sadece biriktir)
         response_tokens.push(new_token_id);
         
         // Log first few tokens to debug
         if i < 5 {
-            info!("🔤 Token {}: id={:?}, logit={}", i, new_token_id, 
-                  candidates_vec.iter().find(|c| c.id() == new_token_id).map(|c| c.logit()).unwrap_or(0.0));
+            info!("🔤 Token {}: id={:?}", i, new_token_id);
         }
 
         // Log every 50 tokens
@@ -369,25 +475,12 @@ pub async fn unload_gguf_model(
     
     let mut state_guard = state.lock().unwrap();
     
-    // Explicitly drop model first (releases GPU memory)
-    if state_guard.model.is_some() {
-        info!("🧹 Dropping model from GPU...");
-        state_guard.model = None;
-        info!("✅ Model dropped");
-    }
-    
-    // Then drop backend (releases CUDA context)
-    if state_guard.backend.is_some() {
-        info!("🧹 Dropping backend (CUDA context)...");
-        state_guard.backend = None;
-        info!("✅ Backend dropped");
-    }
+    state_guard.models.clear();
+    state_guard.backend = None;
+    state_guard.backend_initialized = false;
     
     // Clear state
-    state_guard.model_path = None;
-    state_guard.n_ctx = 4096;
-    state_guard.n_gpu_layers = 0;
-    state_guard.backend_initialized = false;
+    // Clear state done above
     
     // Force garbage collection hint (Rust will handle it)
     drop(state_guard);
@@ -401,12 +494,11 @@ pub async fn get_gguf_model_status(
     state: State<'_, Arc<Mutex<GgufState>>>,
 ) -> Result<serde_json::Value, String> {
     let state_guard = state.lock().unwrap();
-    let is_loaded = state_guard.model.is_some();
-    let model_path = state_guard.model_path.clone();
+    let loaded_models: Vec<String> = state_guard.models.keys().cloned().collect();
     
     Ok(json!({
-        "loaded": is_loaded,
-        "model_path": model_path
+        "loaded": !loaded_models.is_empty(),
+        "loaded_models": loaded_models
     }))
 }
 
@@ -417,8 +509,8 @@ pub async fn get_gpu_memory_info(
 ) -> Result<serde_json::Value, String> {
     let state_guard = state.lock().unwrap();
     
-    // Model yüklü mü kontrol et
-    if state_guard.model.is_none() {
+    // Note: This returns generic GPU info if any model is loaded
+    if state_guard.models.is_empty() {
         return Ok(json!({
             "available": false,
             "total_vram_gb": 0.0,
@@ -430,8 +522,40 @@ pub async fn get_gpu_memory_info(
         }));
     }
     
-    let n_ctx = state_guard.n_ctx;
-    let n_gpu_layers = state_guard.n_gpu_layers;
+    // Use the first model for estimation or sum them up
+    // For now, let's just use representative values
+    let representative_model = state_guard.models.values().next().unwrap();
+    let n_ctx = representative_model.n_ctx;
+    let n_gpu_layers = representative_model.n_gpu_layers;
+    
+    // 🔥 Dinamik sistem VRAM bilgisi al
+    // Eğer GPU yüklü değilse sistem RAM'ı kullan
+    use sysinfo::System;
+    let mut sys = System::new_all();
+    sys.refresh_all();
+    
+    // Eğer GPU varsa (CUDA/Vulkan), varsayılan olarak daha düşük bir değer al
+    // Gerçek VRAM bilgisi almak için platform-specific kod gerekli
+    let total_vram_gb = if cfg!(feature = "cuda") || cfg!(feature = "vulkan") {
+        // GPU var - ancak gerçek VRAM alamıyoruz, bu nedenle bir tahmin yap
+        // NVIDIA için nvidia-smi, AMD için rocm-smi, Intel için level-zero kullanılabilir
+        // Şimdilik 12GB varsayılan (değiştirilebilir)
+        let detected_vram = detect_gpu_vram();
+        detected_vram
+    } else {
+        // GPU yok - sistem RAM'ını kullan (CPU mode)
+        let total_memory_bytes = sys.total_memory();
+        let total_memory_gb = total_memory_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+        total_memory_gb * 0.7 // CPU mode için %70'ini kullan
+    };
+    
+    let _free_vram_gb = if cfg!(feature = "cuda") || cfg!(feature = "vulkan") {
+        total_vram_gb // GPU serbest bellek - tahmin yap
+    } else {
+        let available_memory_bytes = sys.available_memory();
+        let available_memory_gb = available_memory_bytes as f64 / (1024.0 * 1024.0 * 1024.0);
+        available_memory_gb * 0.7
+    };
     
     // 🔥 Düzeltilmiş hesaplamalar
     // Model size: Q4 quantization için ~0.5-0.6 GB per billion parameters
@@ -448,22 +572,47 @@ pub async fn get_gpu_memory_info(
     let kv_cache_gb = (2.0 * n_layers * n_ctx as f64 * hidden_size * bytes_per_element) / 1_000_000_000.0;
     
     let used_vram = estimated_model_size + kv_cache_gb;
-    let total_vram = 12.0; // RTX 5070
-    let free_vram = (total_vram - used_vram).max(0.0); // Negatif olmasın
-    let usage_percent = ((used_vram / total_vram) * 100.0).min(100.0); // Max %100
+    let safe_used_vram = used_vram.min(total_vram_gb);
+    let safe_free_vram = (total_vram_gb - safe_used_vram).max(0.0); // Negatif olmasın
+    let usage_percent = ((safe_used_vram / total_vram_gb) * 100.0).min(100.0); // Max %100
     
-    info!("📊 GPU Memory: {:.1} GB / {:.1} GB ({:.1}%)", used_vram, total_vram, usage_percent);
+    info!("📊 GPU Memory: {:.1} GB / {:.1} GB ({:.1}%)", safe_used_vram, total_vram_gb, usage_percent);
     info!("   Model: {:.1} GB, KV Cache: {:.1} GB", estimated_model_size, kv_cache_gb);
     
     Ok(json!({
         "available": true,
-        "total_vram_gb": total_vram,
-        "used_vram_gb": used_vram,
-        "free_vram_gb": free_vram,
+        "total_vram_gb": total_vram_gb,
+        "used_vram_gb": safe_used_vram,
+        "free_vram_gb": safe_free_vram,
         "usage_percent": usage_percent,
         "model_size_gb": estimated_model_size,
         "kv_cache_size_gb": kv_cache_gb
     }))
+}
+
+/// GPU VRAM bilgisini algıla (platform-specific)
+fn detect_gpu_vram() -> f64 {
+    // 🎮 NVIDIA GPU - nvidia-smi ile kontrol et
+    if cfg!(target_os = "windows") {
+        if let Ok(output) = std::process::Command::new("nvidia-smi")
+            .args(&["--query-gpu=memory.total", "--format=csv,noheader,nounits"])
+            .output()
+        {
+            if output.status.success() {
+                if let Ok(output_str) = String::from_utf8(output.stdout) {
+                    if let Ok(vram_mb) = output_str.trim().parse::<f64>() {
+                        let vram_gb = vram_mb / 1024.0;
+                        info!("🎮 Detected GPU VRAM: {:.1} GB", vram_gb);
+                        return vram_gb;
+                    }
+                }
+            }
+        }
+    }
+    
+    // Varsayılan olarak 12GB döndür (kullanıcı ayarlayabilir)
+    info!("⚠️ GPU VRAM alınamadı, 12GB varsayılan kullanılıyor");
+    12.0
 }
 
 // 🆕 GGUF Metadata Okuyucu
@@ -593,6 +742,7 @@ pub async fn read_gguf_metadata(
 #[tauri::command]
 pub async fn chat_with_gguf_vision(
     state: State<'_, Arc<Mutex<GgufState>>>,
+    model_path: String, // 🆕 Model path required
     prompt: String,
     images: Vec<String>, // Base64 encoded images
     max_tokens: u32,
@@ -611,9 +761,9 @@ pub async fn chat_with_gguf_vision(
     // Check if model is loaded (in a separate scope to drop the lock immediately)
     {
         let state_guard = state.lock().unwrap();
-        if state_guard.model.is_none() {
-            error!("❌ Model not loaded!");
-            return Err("❌ Vision model not loaded! Please load a vision-capable model first.".to_string());
+        if !state_guard.models.contains_key(&model_path) {
+            error!("❌ Model not found in pool: {}", model_path);
+            return Err(format!("Vision model pool'da bulunamadı: {}", model_path));
         }
     } // Lock is dropped here
     
@@ -629,7 +779,6 @@ pub async fn chat_with_gguf_vision(
         
         match general_purpose::STANDARD.decode(base64_data) {
             Ok(bytes) => {
-                info!("✅ Image {} decoded: {} bytes", idx, bytes.len());
                 decoded_images.push(bytes);
             }
             Err(e) => {
@@ -658,7 +807,7 @@ pub async fn chat_with_gguf_vision(
     );
     
     // Use the existing text chat function
-    chat_with_gguf_model(state, vision_prompt, max_tokens, temperature).await
+    chat_with_gguf_model(state, model_path, vision_prompt, max_tokens, temperature).await
 }
 
 // Check if CUDA is available
@@ -693,3 +842,46 @@ pub fn check_cuda_support() -> Result<serde_json::Value, String> {
         }
     }))
 }
+
+/// Split GGUF dosyalarini tespit edip ilk parcaya yonlendirir.
+/// Ornek: "model-00003-of-00004.gguf" -> "model-00001-of-00004.gguf"
+/// Tek parca dosyalarda ayni yolu dondurur.
+fn resolve_split_gguf_path(path: &str) -> String {
+    let re = regex::Regex::new(r"(-\d{5})-of-(\d{5})\.gguf$").ok();
+    if let Some(re) = re {
+        if let Some(caps) = re.captures(path) {
+            let total = caps[2].to_string();
+            let first_part = format!("-00001-of-{}.gguf", total);
+            let resolved = re.replace(path, first_part.as_str()).to_string();
+            if resolved != path {
+                info!("🔀 Split GGUF detected: redirecting to first shard");
+                info!("   Original: {}", path);
+                info!("   Resolved: {}", resolved);
+                
+                let total_num: u32 = total.parse().unwrap_or(1);
+                for i in 1..=total_num {
+                    let part_path = re.replace(path, format!("-{:05}-of-{}.gguf", i, total).as_str()).to_string();
+                    if !Path::new(&part_path).exists() {
+                        warn!("⚠️ Missing split part: {}", part_path);
+                    }
+                }
+            }
+            return resolved;
+        }
+    }
+    path.to_string()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn test_resolve_split_gguf_path() {
+        assert_eq!(resolve_split_gguf_path("test.gguf"), "test.gguf");
+        assert_eq!(resolve_split_gguf_path("model-00001-of-00005.gguf"), "model-00001-of-00005.gguf");
+        assert_eq!(resolve_split_gguf_path("model-00003-of-00005.gguf"), "model-00001-of-00005.gguf");
+    }
+}
+
+

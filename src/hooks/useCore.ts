@@ -21,6 +21,10 @@ export function useCore() {
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
   
+  // 🔥 FIXED 2025: Batch streaming/token messages to prevent excessive re-renders
+  const pendingTokenRef = useRef<CoreMessage | null>(null);
+  const tokenBatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  
   // Listen to Core messages
   useEffect(() => {
     const setupListener = async () => {
@@ -30,7 +34,27 @@ export function useCore() {
         const message = event.payload;
         console.log(`📨 useCore: Received Core message: ${message.messageType}`);
         
-        // Add to messages array
+        // 🔥 Batch streaming/token messages - don't setState for every token
+        if (message.messageType === 'streaming/token') {
+          pendingTokenRef.current = message;
+          
+          // Clear existing timeout
+          if (tokenBatchTimeoutRef.current) {
+            clearTimeout(tokenBatchTimeoutRef.current);
+          }
+          
+        // 🔥 Batch after 200ms instead of immediate setState
+          tokenBatchTimeoutRef.current = setTimeout(() => {
+            if (pendingTokenRef.current) {
+              setCoreMessages(prev => [...prev, pendingTokenRef.current!]);
+              pendingTokenRef.current = null;
+            }
+          }, 200);
+          
+          return; // Don't process immediately
+        }
+        
+        // For non-token messages, add immediately
         setCoreMessages(prev => [...prev, message]);
         
         // Track streaming state
@@ -56,6 +80,9 @@ export function useCore() {
       if (unlistenRef.current) {
         unlistenRef.current();
         console.log('🧹 useCore: Listener cleaned up');
+      }
+      if (tokenBatchTimeoutRef.current) {
+        clearTimeout(tokenBatchTimeoutRef.current);
       }
     };
   }, []);

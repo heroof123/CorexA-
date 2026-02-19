@@ -82,7 +82,7 @@ export class GhostDeveloper {
       for (const file of fileIndex) {
         if (/\.(ts|tsx|js|jsx)$/.test(file.path)) {
           try {
-            const analysis = parseFile(file.path, file.content);
+            const analysis = await parseFile(file.path, file.content);
             analyses.push(analysis);
             this.analysisCache.set(file.path, analysis);
           } catch (error) {

@@ -2,6 +2,8 @@
 // Code analysis and smart context building for AI
 
 import * as ts from 'typescript';
+import { parserRegistry, isLanguageSupported } from './parserRegistry';
+import type { FileAnalysis as AINativeFileAnalysis } from '../types/ai-native';
 
 export interface Symbol {
   name: string;
@@ -53,8 +55,159 @@ export interface CallHierarchy {
 
 /**
  * Parse TypeScript/JavaScript file and extract symbols
+ * Now supports multi-language parsing via ParserRegistry
  */
-export function parseFile(filePath: string, sourceCode: string): FileAnalysis {
+export async function parseFile(filePath: string, sourceCode: string): Promise<FileAnalysis> {
+  console.log('🔍 Parsing file:', filePath);
+  
+  // Extract file extension
+  const ext = filePath.split('.').pop() || '';
+  
+  // In test environment, use ParserRegistry for all supported languages including TS/JS
+  const isTestEnv = typeof process !== 'undefined' && (process.env.NODE_ENV === 'test' || process.env.VITEST);
+  
+  // Check if we should use ParserRegistry
+  if (isTestEnv && isLanguageSupported(ext)) {
+    console.log(`📦 Using ParserRegistry for ${ext} file (test mode)`);
+    try {
+      const aiNativeAnalysis = await parserRegistry.parseFile(filePath, sourceCode);
+      
+      // Check if parsing was successful
+      if (!aiNativeAnalysis) {
+        console.error('❌ ParserRegistry returned null');
+        // Return empty analysis
+        return {
+          filePath,
+          symbols: [],
+          imports: [],
+          exports: [],
+          dependencies: [],
+          dependents: [],
+          complexity: 0,
+          linesOfCode: sourceCode.split('\n').length,
+        };
+      }
+      
+      // Convert AI-Native FileAnalysis to SemanticBrain FileAnalysis
+      return convertAINativeToSemanticBrain(aiNativeAnalysis, sourceCode);
+    } catch (error) {
+      console.error('❌ ParserRegistry error:', error);
+      // Return empty analysis
+      return {
+        filePath,
+        symbols: [],
+        imports: [],
+        exports: [],
+        dependencies: [],
+        dependents: [],
+        complexity: 0,
+        linesOfCode: sourceCode.split('\n').length,
+      };
+    }
+  }
+  
+  // Check if we should use ParserRegistry (non-TypeScript/JavaScript files in production)
+  if (ext !== 'ts' && ext !== 'tsx' && ext !== 'js' && ext !== 'jsx' && isLanguageSupported(ext)) {
+    console.log(`📦 Using ParserRegistry for ${ext} file`);
+    try {
+      const aiNativeAnalysis = await parserRegistry.parseFile(filePath, sourceCode);
+      
+      // Check if parsing was successful
+      if (!aiNativeAnalysis) {
+        console.error('❌ ParserRegistry returned null');
+        // Return empty analysis for non-TS/JS files
+        return {
+          filePath,
+          symbols: [],
+          imports: [],
+          exports: [],
+          dependencies: [],
+          dependents: [],
+          complexity: 0,
+          linesOfCode: sourceCode.split('\n').length,
+        };
+      }
+      
+      // Convert AI-Native FileAnalysis to SemanticBrain FileAnalysis
+      return convertAINativeToSemanticBrain(aiNativeAnalysis, sourceCode);
+    } catch (error) {
+      console.error('❌ ParserRegistry error:', error);
+      // Return empty analysis for non-TS/JS files
+      return {
+        filePath,
+        symbols: [],
+        imports: [],
+        exports: [],
+        dependencies: [],
+        dependents: [],
+        complexity: 0,
+        linesOfCode: sourceCode.split('\n').length,
+      };
+    }
+  }
+  
+  // Use existing TypeScript parser for TS/JS files in production
+  return parseTypeScriptFile(filePath, sourceCode);
+}
+
+/**
+ * Convert AI-Native FileAnalysis to SemanticBrain FileAnalysis
+ */
+function convertAINativeToSemanticBrain(
+  aiNativeAnalysis: AINativeFileAnalysis,
+  sourceCode: string
+): FileAnalysis {
+  // Convert symbols
+  const symbols: Symbol[] = aiNativeAnalysis.symbols.map(s => ({
+    name: s.name,
+    kind: s.kind as any, // AI-Native uses same kinds
+    filePath: aiNativeAnalysis.file_path,
+    line: s.line,
+    column: s.column,
+    signature: s.signature,
+    documentation: s.documentation,
+    isExported: s.is_exported,
+    dependencies: [], // Will be populated by dependency analysis
+  }));
+  
+  // Convert imports
+  const imports: ImportInfo[] = aiNativeAnalysis.imports.map(imp => ({
+    moduleName: imp,
+    importedSymbols: [],
+    isDefault: false,
+    line: 0,
+  }));
+  
+  // Convert exports
+  const exports: ExportInfo[] = aiNativeAnalysis.exports.map(exp => ({
+    symbolName: exp,
+    isDefault: false,
+    line: 0,
+  }));
+  
+  // Calculate lines of code
+  const linesOfCode = sourceCode.split('\n').filter(line => {
+    const trimmed = line.trim();
+    return trimmed.length > 0 && !trimmed.startsWith('//') && !trimmed.startsWith('#');
+  }).length;
+  
+  return {
+    filePath: aiNativeAnalysis.file_path,
+    symbols,
+    imports,
+    exports,
+    dependencies: aiNativeAnalysis.dependencies,
+    dependents: aiNativeAnalysis.dependents,
+    complexity: aiNativeAnalysis.complexity,
+    linesOfCode,
+  };
+}
+
+/**
+ * Parse TypeScript/JavaScript file using TypeScript compiler API
+ * (Original implementation, now extracted as separate function)
+ */
+function parseTypeScriptFile(filePath: string, sourceCode: string): FileAnalysis {
   console.log('🔍 Parsing file:', filePath);
   
   // Create TypeScript source file

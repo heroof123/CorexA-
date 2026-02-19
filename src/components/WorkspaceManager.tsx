@@ -28,35 +28,35 @@ export default function WorkspaceManager({ currentProjectPath, onWorkspaceSelect
     {
       id: 'react-ts',
       name: 'React + TypeScript',
-      description: 'Modern React app with TypeScript and Vite',
+      description: 'TypeScript ve Vite ile modern React uygulaması',
       icon: '⚛️',
       files: ['package.json', 'src/App.tsx', 'src/main.tsx', 'index.html']
     },
     {
       id: 'vue-ts',
       name: 'Vue 3 + TypeScript',
-      description: 'Vue 3 composition API with TypeScript',
+      description: 'TypeScript ile Vue 3 Composition API',
       icon: '💚',
       files: ['package.json', 'src/App.vue', 'src/main.ts', 'index.html']
     },
     {
       id: 'node-express',
       name: 'Node.js + Express',
-      description: 'REST API server with Express and TypeScript',
+      description: 'Express ve TypeScript ile REST API sunucusu',
       icon: '🟢',
       files: ['package.json', 'src/server.ts', 'src/routes/index.ts']
     },
     {
       id: 'python-fastapi',
       name: 'Python + FastAPI',
-      description: 'Modern Python API with FastAPI',
+      description: 'FastAPI ile modern Python API',
       icon: '🐍',
       files: ['requirements.txt', 'main.py', 'app/routes.py']
     },
     {
       id: 'rust-tauri',
       name: 'Rust + Tauri',
-      description: 'Desktop app with Rust backend and web frontend',
+      description: 'Rust backend ve web frontend ile masaüstü uygulaması',
       icon: '🦀',
       files: ['Cargo.toml', 'src-tauri/src/main.rs', 'src/App.tsx']
     }
@@ -85,7 +85,7 @@ export default function WorkspaceManager({ currentProjectPath, onWorkspaceSelect
     try {
       const files = await invoke<string[]>('scan_project', { path });
       const name = path.split(/[\\/]/).pop() || 'Unknown';
-      
+
       let projectType = 'Unknown';
       if (files.some(f => f.endsWith('package.json'))) projectType = 'Node.js';
       if (files.some(f => f.endsWith('Cargo.toml'))) projectType = 'Rust';
@@ -103,7 +103,7 @@ export default function WorkspaceManager({ currentProjectPath, onWorkspaceSelect
 
       const updated = workspaces.map(w => ({ ...w, isActive: false }));
       updated.push(newWorkspace);
-      
+
       setWorkspaces(updated);
       localStorage.setItem('workspaces', JSON.stringify(updated));
     } catch (error) {
@@ -123,7 +123,7 @@ export default function WorkspaceManager({ currentProjectPath, onWorkspaceSelect
       isActive: w.id === workspace.id,
       lastOpened: w.id === workspace.id ? Date.now() : w.lastOpened
     }));
-    
+
     setWorkspaces(updated);
     localStorage.setItem('workspaces', JSON.stringify(updated));
     onWorkspaceSelect(workspace.path);
@@ -135,15 +135,15 @@ export default function WorkspaceManager({ currentProjectPath, onWorkspaceSelect
       if (!template) return;
 
       const projectPath = `${location}/${projectName}`;
-      
+
       // Create project structure based on template
       await invoke('create_directory', { path: projectPath });
-      
+
       // Create template files
       for (const file of template.files) {
         const filePath = `${projectPath}/${file}`;
         let content = '';
-        
+
         if (file === 'package.json' && templateId.includes('react')) {
           content = JSON.stringify({
             name: projectName,
@@ -184,10 +184,10 @@ function App() {
 
 export default App`;
         }
-        
+
         await invoke('write_file', { path: filePath, content });
       }
-      
+
       await addWorkspace(projectPath);
       setShowCreateTemplate(false);
     } catch (error) {
@@ -200,7 +200,7 @@ export default App`;
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
         <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">🏢 {t('activity.workspace')}</h2>
-        
+
         <div className="flex gap-2">
           <button
             onClick={async () => {
@@ -235,11 +235,10 @@ export default App`;
             {workspaces.map(workspace => (
               <div
                 key={workspace.id}
-                className={`p-3 border rounded cursor-pointer transition-all ${
-                  workspace.isActive 
-                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10' 
+                className={`p-3 border rounded cursor-pointer transition-all ${workspace.isActive
+                    ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
                     : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/50'
-                }`}
+                  }`}
                 onClick={() => switchWorkspace(workspace)}
               >
                 <div className="flex items-start justify-between">
@@ -277,20 +276,19 @@ export default App`;
       {showCreateTemplate && (
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
           <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg p-6 w-96 max-h-[80vh] overflow-y-auto">
-            <h3 className="text-lg font-semibold mb-4">Create New Project</h3>
-            
+            <h3 className="text-lg font-semibold mb-4">Yeni Proje Oluştur</h3>
+
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium mb-2">Project Template</label>
+                <label className="block text-sm font-medium mb-2">Proje Şablonu</label>
                 <div className="space-y-2">
                   {projectTemplates.map(template => (
                     <div
                       key={template.id}
-                      className={`p-3 border rounded cursor-pointer transition-colors ${
-                        selectedTemplate === template.id
+                      className={`p-3 border rounded cursor-pointer transition-colors ${selectedTemplate === template.id
                           ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
                           : 'border-[var(--color-border)] hover:border-[var(--color-primary)]/50'
-                      }`}
+                        }`}
                       onClick={() => setSelectedTemplate(template.id)}
                     >
                       <div className="flex items-center gap-3">
@@ -310,7 +308,7 @@ export default App`;
                   onClick={() => setShowCreateTemplate(false)}
                   className="flex-1 px-4 py-2 border border-[var(--color-border)] rounded hover:bg-[var(--color-hover)] transition-colors"
                 >
-                  Cancel
+                  İptal
                 </button>
                 <button
                   onClick={() => {
@@ -322,7 +320,7 @@ export default App`;
                   disabled={!selectedTemplate}
                   className="flex-1 px-4 py-2 bg-[var(--color-primary)] text-white rounded hover:opacity-80 transition-opacity disabled:opacity-50"
                 >
-                  Create
+                  Oluştur
                 </button>
               </div>
             </div>

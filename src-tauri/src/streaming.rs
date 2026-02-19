@@ -1,7 +1,7 @@
 // src-tauri/src/streaming.rs
 // Real streaming implementation for Cursor-like experience
 
-use tauri::{AppHandle, Emitter, Manager, State};
+use tauri::{AppHandle, Emitter, Manager};
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
 
@@ -13,6 +13,7 @@ pub struct StreamToken {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct StreamingRequest {
+    pub model_path: Option<String>, // 🆕 Model path for GGUF
     pub prompt: String,
     pub max_tokens: Option<i32>,
     pub temperature: Option<f32>,
@@ -30,10 +31,22 @@ pub async fn chat_with_streaming(
     let gguf_state = app.state::<Arc<Mutex<crate::gguf::GgufState>>>();
     
     // Check if model is loaded
+    let model_path = match &request.model_path {
+        Some(path) => path.clone(),
+        None => {
+            // Fallback to first loaded model if not specified
+            let state = gguf_state.lock().unwrap();
+            match state.models.keys().next() {
+                Some(path) => path.clone(),
+                None => return Err("No GGUF models loaded. Please load a model first.".to_string()),
+            }
+        }
+    };
+
     {
         let state = gguf_state.lock().unwrap();
-        if state.model.is_none() {
-            return Err("No model loaded. Please load a model first.".to_string());
+        if !state.models.contains_key(&model_path) {
+            return Err(format!("Model not found in pool: {}", model_path));
         }
     }
     
@@ -46,6 +59,7 @@ pub async fn chat_with_streaming(
     // For now, simulate streaming with the existing model
     let response = crate::gguf::chat_with_gguf_model(
         gguf_state,
+        model_path, // 🆕 Pass the resolved model path
         request.prompt.clone(),
         request.max_tokens.unwrap_or(2000) as u32,
         request.temperature.unwrap_or(0.7),
@@ -54,7 +68,7 @@ pub async fn chat_with_streaming(
     // Simulate streaming by splitting response
     let words: Vec<&str> = response.split_whitespace().collect();
     
-    for (i, word) in words.iter().enumerate() {
+    for (_i, word) in words.iter().enumerate() {
         let token = format!("{} ", word);
         full_response.push_str(&token);
         

@@ -1,59 +1,31 @@
-# Changelog
+# Corex AI - v2 Changelog (God Mode Ultimate)
 
-All notable changes to this project will be documented in this file.
+Bu sürüm, Corex'i modern bir editörden "Yapay Zeka Destekli Geliştirme Platformu"na dönüştüren devrimsel yol haritasını içerir.
 
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+## 🚀 Yeni Eklenen Özellikler & Yol Haritası
 
-## [0.1.0] - 2025-02-17
+### 🎨 Ultra-Modern UI/UX
+- **Glassmorphism:** Yarı saydam paneller ve bulanıklık efektleri.
+- **Neon Estetiği:** Cyberpunk tarzı parlak butonlar ve vurgular.
+- **Zen Modu:** Odaklanmayı artıran minimalist görünüm.
 
-### Added
-- Initial release of CorexAI IDE
-- AI-powered code editor with local LLM support
-- Support for LM Studio, Ollama, and GGUF models
-- Monaco editor integration with syntax highlighting
-- Multi-tab file editing
-- Git integration (commit, push, pull, branches)
-- Integrated terminal panel
-- Task manager with Kanban board
-- Docker container management
-- Database browser (SQLite, MySQL, PostgreSQL)
-- API testing tool (REST client)
-- GitHub and Microsoft OAuth integration
-- Incremental file indexing
-- Smart caching system
-- Diff viewer for file comparison
-- Command palette
-- Keyboard shortcuts
-- Theme customization
-- Multi-language support
+### 🧠 Deep Context & RAG
+- **Vektör Hafıza:** Tüm proje geçmişini ve dokümanlarını hatırlayan AI.
+- **Smart Code Lens PRO:** Fonksiyonlar üzerinde canlı analiz verileri.
 
-### Features
-- **Local AI Processing** - All AI operations run locally, no cloud required
-- **Cross-Platform** - Windows, macOS, and Linux support
-- **Lightweight** - Built with Tauri for native performance
-- **Privacy-Focused** - Your code never leaves your machine
-- **Extensible** - Plugin system for custom extensions
+### 🔮 Predictive Coding & Agents
+- **Ghost Text Next-Gen:** Blok bazlı kod tahminleme.
+- **Autonomous Agents:** Kendi kendine hata düzelten ve test yazan botlar.
 
-### Technical
-- React 19 with TypeScript 5.8
-- Tauri 2 with Rust backend
-- Monaco Editor for code editing
-- Xenova Transformers for embeddings
-- llama.cpp for GGUF model support
+### 🛡️ Security Fortress
+- **Canlı Güvenlik Taraması:** Kod yazarken anlık açık tespiti (SQLi, XSS).
 
-## [Unreleased]
+### ☁️ Cloud & DevOps
+- **Docker UI:** Görsel konteyner yönetimi.
+- **One-Click Deploy:** Vercel/Netlify entegrasyonu.
 
-### Planned
-- Multi-file refactoring
-- Automated test generation
-- Code review automation
-- Plugin marketplace
-- Remote development support
-- Collaborative editing
-- Enhanced Git features
-- Custom themes marketplace
+### 🎮 Gamification
+- **XP Sistemi:** Kod yazdıkça seviye atlama ve başarı rozetleri.
 
 ---
-
-[0.1.0]: https://github.com/heroof123/CorexAI/releases/tag/v0.1.0
+*Bu dosya, projenin v2 vizyonunu belgelemek için oluşturulmuştur.*

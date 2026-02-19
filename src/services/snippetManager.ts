@@ -1,4 +1,6 @@
-// services/snippetManager.ts - Code snippet yönetimi
+// services/snippetManager.ts - Code snippet yönetimi (IndexedDB powered)
+
+import { createEmbedding } from './embedding';
 
 export interface Snippet {
   id: string;
@@ -7,35 +9,81 @@ export interface Snippet {
   language: string;
   code: string;
   tags: string[];
+  projectContext?: string;
   createdAt: number;
+  updatedAt: number;
   usageCount: number;
+  embedding?: number[]; // Vector embedding for AI recommendations
 }
 
 export class SnippetManager {
-  private snippets: Map<string, Snippet> = new Map();
-  private readonly STORAGE_KEY = 'corex_snippets';
+  private db: IDBDatabase | null = null;
+  private readonly DB_NAME = 'CorexAI_Snippets';
+  private readonly STORE_NAME = 'snippets';
+  private readonly STORAGE_KEY = 'corex_snippets_legacy'; // For migration
 
-  constructor() {
-    this.loadFromStorage();
-    this.addDefaultSnippets();
+  async init(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      const request = indexedDB.open(this.DB_NAME, 1);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        this.db = request.result;
+        console.log('✅ Snippet Manager IndexedDB initialized');
+        resolve();
+      };
+
+      request.onupgradeneeded = (event) => {
+        const db = (event.target as IDBOpenDBRequest).result;
+        if (!db.objectStoreNames.contains(this.STORE_NAME)) {
+          const store = db.createObjectStore(this.STORE_NAME, { keyPath: 'id' });
+          store.createIndex('language', 'language', { unique: false });
+          store.createIndex('tags', 'tags', { unique: false, multiEntry: true });
+          store.createIndex('createdAt', 'createdAt', { unique: false });
+          store.createIndex('usageCount', 'usageCount', { unique: false });
+          store.createIndex('projectContext', 'projectContext', { unique: false });
+          console.log('✅ Snippet Manager database upgraded');
+        }
+      };
+    });
   }
 
   /**
-   * Snippet ekle
+   * Snippet ekle (with auto-embedding)
    */
-  addSnippet(snippet: Omit<Snippet, 'id' | 'createdAt' | 'usageCount'>): Snippet {
+  async addSnippet(snippet: Omit<Snippet, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'>): Promise<Snippet> {
+    if (!this.db) await this.init();
+
+    const id = `snippet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+    
+    // Generate embedding for AI recommendations
+    let embedding: number[] | undefined;
+    try {
+      embedding = await createEmbedding(snippet.code.substring(0, 500));
+    } catch (error) {
+      console.warn('⚠️ Embedding generation failed:', error);
+    }
+
     const newSnippet: Snippet = {
       ...snippet,
-      id: this.generateId(),
+      id,
       createdAt: Date.now(),
-      usageCount: 0
+      updatedAt: Date.now(),
+      usageCount: 0,
+      embedding,
     };
 
-    this.snippets.set(newSnippet.id, newSnippet);
-    this.saveToStorage();
-    
-    console.log(`✅ Snippet eklendi: ${newSnippet.name}`);
-    return newSnippet;
+    return new Promise((resolve, reject) => {
+      const transaction = this.db!.transaction([this.STORE_NAME], 'readwrite');
+      const store = transaction.objectStore(this.STORE_NAME);
+      const request = store.add(newSnippet);
+
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        console.log(`✅ Snippet eklendi: ${newSnippet.name}`);
+        resolve(newSnippet);
+      };
+    });
   }
 
   /**

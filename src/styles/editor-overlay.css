@@ -1,0 +1,60 @@
+/* src/styles/editor-overlay.css */
+/* 🆕 TASK 12.12: Editor Overlay Decoration Styles */
+
+/* Error decorations */
+.corex-error-decoration {
+  background-color: rgba(255, 0, 0, 0.1);
+  border-bottom: 2px wavy #ff0000;
+}
+
+.corex-error-inline {
+  text-decoration: underline wavy #ff0000;
+}
+
+.corex-glyph-error {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6" fill="%23ff0000"/><text x="8" y="11" text-anchor="middle" fill="white" font-size="10" font-weight="bold">✕</text></svg>') center center no-repeat;
+  width: 16px;
+  height: 16px;
+}
+
+/* Warning decorations */
+.corex-warning-decoration {
+  background-color: rgba(255, 165, 0, 0.1);
+  border-bottom: 2px wavy #ffa500;
+}
+
+.corex-warning-inline {
+  text-decoration: underline wavy #ffa500;
+}
+
+.corex-glyph-warning {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><path d="M8 1l7 14H1L8 1z" fill="%23ffa500"/><text x="8" y="12" text-anchor="middle" fill="white" font-size="10" font-weight="bold">!</text></svg>') center center no-repeat;
+  width: 16px;
+  height: 16px;
+}
+
+/* Info decorations */
+.corex-info-decoration {
+  background-color: rgba(0, 191, 255, 0.05);
+  border-bottom: 1px dotted #00bfff;
+}
+
+.corex-glyph-lightbulb {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="6" r="4" fill="%2300bfff"/><rect x="6" y="10" width="4" height="4" fill="%2300bfff"/></svg>') center center no-repeat;
+  width: 16px;
+  height: 16px;
+}
+
+/* Hover tooltip styling */
+.monaco-hover {
+  max-width: 500px;
+}
+
+.monaco-hover .hover-row {
+  padding: 4px 8px;
+}
+
+/* Code action menu */
+.monaco-editor .lightbulb-glyph {
+  background: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 16 16"><circle cx="8" cy="6" r="4" fill="%23ffcc00"/><rect x="6" y="10" width="4" height="4" fill="%23ffcc00"/></svg>') center center no-repeat;
+}

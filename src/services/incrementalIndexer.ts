@@ -167,6 +167,15 @@ export class IncrementalIndexer {
         hash: cacheKey
       });
       
+      // 🆕 Vector DB'ye indexle
+      try {
+        await invoke("index_file_vector", { filePath });
+        console.log(`✅ Vector DB'ye eklendi: ${filePath}`);
+      } catch (error) {
+        console.warn(`⚠️ Vector DB indexleme hatası (${filePath}):`, error);
+        // Vector DB hatası indexlemeyi durdurmasın
+      }
+      
       return {
         path: filePath,
         content: content.substring(0, 10000),

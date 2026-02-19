@@ -24,10 +24,9 @@
         "titleBarStyle": "Transparent"
       }
     ],
- "security": {
-  "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* https://*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
-}
-
+    "security": {
+      "csp": "default-src 'self'; connect-src 'self' http://127.0.0.1:* http://localhost:* https://*; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'"
+    }
   },
   "bundle": {
     "active": true,

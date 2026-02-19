@@ -1,195 +1,256 @@
-import { useState } from 'react';
-
-interface Model {
-  id: string;
-  name: string;
-  displayName: string;
-  size: string;
-  sizeBytes: number;
-  quantization: string;
-  parameters?: string;
-  contextLength?: number;
-}
+import { useState, useRef, useEffect } from 'react';
+import { compareModels } from '../services/ai';
+import { loadAIProviders, AIModel } from '../services/aiProvider';
+import { Message } from '../types';
 
 interface ModelComparisonProps {
-  models: Model[];
   onClose: () => void;
 }
 
-export default function ModelComparison({ models, onClose }: ModelComparisonProps) {
-  const [model1, setModel1] = useState<Model | null>(models[0] || null);
-  const [model2, setModel2] = useState<Model | null>(models[1] || null);
+export default function ModelComparison({ onClose }: ModelComparisonProps) {
+  const [availableModels, setAvailableModels] = useState<AIModel[]>([]);
+  const [model1Id, setModel1Id] = useState<string>('');
+  const [model2Id, setModel2Id] = useState<string>('');
 
-  const calculateVRAM = (model: Model, context: number = 8192) => {
-    const sizeGB = model.sizeBytes / (1024 ** 3);
-    
-    // Model size (Q4 quantization için)
-    const modelVRAM = sizeGB;
-    
-    // KV Cache hesaplama (doğru formül)
-    // KV cache = 2 (K+V) × layers × context × hidden_size × bytes / 1e9
-    const layers = 28; // Qwen/Llama için tipik
-    const hiddenSize = 4096;
-    const bytesPerElement = 2; // fp16
-    
-    const kvCacheGB = (2 * layers * context * hiddenSize * bytesPerElement) / 1_000_000_000;
-    
-    return modelVRAM + kvCacheGB;
+  const [input, setInput] = useState('');
+  const [isComparing, setIsComparing] = useState(false);
+
+  const [messages1, setMessages1] = useState<Message[]>([]);
+  const [messages2, setMessages2] = useState<Message[]>([]);
+
+  const [metrics1, setMetrics1] = useState({ speed: 0, tokens: 0, duration: 0 });
+  const [metrics2, setMetrics2] = useState({ speed: 0, tokens: 0, duration: 0 });
+
+  const messagesEndRef1 = useRef<HTMLDivElement>(null);
+  const messagesEndRef2 = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const providers = loadAIProviders();
+    const allModels: AIModel[] = [];
+    providers.forEach(p => {
+      // GGUF provider için tüm indirilmiş modelleri ekle
+      if (p.id === 'gguf-direct' || p.baseUrl === 'internal://gguf') {
+        allModels.push(...p.models.filter(m => m.isActive || (m as any).isDownloaded));
+      } else if (p.isActive) {
+        // Diğer provider'lar için sadece aktif olanları ekle
+        allModels.push(...p.models.filter(m => m.isActive));
+      }
+    });
+
+    // Tekilleştir (ID'ye göre)
+    const uniqueModels = allModels.filter((model, index, self) =>
+      index === self.findIndex((m) => m.id === model.id)
+    );
+
+    setAvailableModels(uniqueModels);
+
+    // Varsayılan seçimleri ayarla
+    if (uniqueModels.length >= 2) {
+      setModel1Id(uniqueModels[0].id);
+      setModel2Id(uniqueModels[1].id);
+    } else if (uniqueModels.length === 1) {
+      setModel1Id(uniqueModels[0].id);
+    }
+  }, []);
+
+  useEffect(() => {
+    messagesEndRef1.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages1]);
+
+  useEffect(() => {
+    messagesEndRef2.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages2]);
+
+  const handleSend = async () => {
+    if (!input.trim() || !model1Id || !model2Id || isComparing) return;
+
+    const userMsg: Message = {
+      id: Date.now().toString(),
+      role: 'user',
+      content: input,
+      timestamp: Date.now()
+    };
+
+    setMessages1(prev => [...prev, userMsg]);
+    setMessages2(prev => [...prev, userMsg]);
+    setIsComparing(true);
+
+    setMessages1(prev => [...prev, { id: 'm1-loading', role: 'assistant', content: '', timestamp: Date.now() }]);
+    setMessages2(prev => [...prev, { id: 'm2-loading', role: 'assistant', content: '', timestamp: Date.now() }]);
+
+    const currentInput = input;
+    setInput('');
+
+    try {
+      await compareModels(
+        currentInput,
+        model1Id,
+        model2Id,
+        (token, m) => {
+          setMessages1(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === 'assistant') {
+              return [...prev.slice(0, -1), { ...last, content: last.content + token }];
+            }
+            return prev;
+          });
+          if (m?.speed) setMetrics1(prev => ({ ...prev, speed: m.speed }));
+        },
+        (token, m) => {
+          setMessages2(prev => {
+            const last = prev[prev.length - 1];
+            if (last && last.role === 'assistant') {
+              return [...prev.slice(0, -1), { ...last, content: last.content + token }];
+            }
+            return prev;
+          });
+          if (m?.speed) setMetrics2(prev => ({ ...prev, speed: m.speed }));
+        }
+      ).then(res => {
+        setMetrics1(prev => ({ ...prev, ...res.metrics1 }));
+        setMetrics2(prev => ({ ...prev, ...res.metrics2 }));
+      });
+    } catch (error) {
+      console.error('Comparison error:', error);
+    } finally {
+      setIsComparing(false);
+    }
   };
 
-  const estimateSpeed = (model: Model) => {
-    const sizeGB = model.sizeBytes / (1024 ** 3);
-    
-    // Küçük modeller daha hızlı
-    if (sizeGB < 3) return 45; // 3B model
-    if (sizeGB < 5) return 28; // 7B model
-    return 15; // 13B+ model
-  };
-
-  const getQualityStars = (model: Model) => {
-    const quant = model.quantization;
-    if (quant.includes('Q6') || quant.includes('Q8')) return 5;
-    if (quant.includes('Q5')) return 4;
-    if (quant.includes('Q4')) return 3;
-    return 2;
-  };
-
-  if (!model1 || !model2) {
+  const ChatColumn = ({
+    modelId,
+    messages,
+    metrics,
+    endRef,
+    color
+  }: {
+    modelId: string,
+    messages: Message[],
+    metrics: any,
+    endRef: any,
+    color: string
+  }) => {
+    const model = availableModels.find(m => m.id === modelId);
     return (
-      <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-        <div className="bg-gray-800 rounded-lg p-6 max-w-md">
-          <h3 className="text-white text-lg mb-4">⚠️ Yetersiz Model</h3>
-          <p className="text-gray-300 mb-4">Karşılaştırma için en az 2 model gerekli.</p>
-          <button onClick={onClose} className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded">
-            Tamam
-          </button>
+      <div className="flex flex-col h-full border-r border-gray-700 last:border-r-0">
+        {/* Model Header */}
+        <div className={`p-3 border-b border-gray-700 bg-gray-900/50 flex justify-between items-center`}>
+          <div>
+            <h3 className={`font-bold ${color}`}>{model?.displayName || 'Model'}</h3>
+            <p className="text-[10px] text-gray-500">{model?.name}</p>
+          </div>
+          <div className="text-right">
+            <div className="text-xs font-mono text-gray-400">{metrics.speed.toFixed(1)} t/s</div>
+            <div className="text-[10px] text-gray-500">{metrics.tokens} tokens</div>
+          </div>
+        </div>
+
+        {/* Messages */}
+        <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
+          {messages.map((msg, i) => (
+            <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+              <div className={`max-w-[90%] p-3 rounded-lg text-sm ${msg.role === 'user'
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-700 text-gray-100 border border-gray-600'
+                }`}>
+                {msg.content}
+              </div>
+            </div>
+          ))}
+          <div ref={endRef} />
         </div>
       </div>
     );
-  }
+  };
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-gray-800 rounded-lg border border-gray-700 max-w-4xl w-full max-h-[90vh] overflow-y-auto">
-        {/* Header */}
-        <div className="flex items-center justify-between p-4 border-b border-gray-700">
-          <h2 className="text-xl font-semibold text-white">⚖️ Model Karşılaştırma</h2>
-          <button onClick={onClose} className="text-gray-400 hover:text-white">✕</button>
-        </div>
-
-        {/* Model Selection */}
-        <div className="p-4 grid grid-cols-2 gap-4 border-b border-gray-700">
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Model 1</label>
-            <select
-              value={model1.id}
-              onChange={(e) => setModel1(models.find(m => m.id === e.target.value) || null)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-            >
-              {models.map(m => (
-                <option key={m.id} value={m.id}>{m.displayName}</option>
-              ))}
-            </select>
+    <div className="flex flex-col h-full bg-[#1e1e1e] text-white">
+      {/* Top Bar - Selection */}
+      <div className="p-3 border-b border-gray-700 bg-gray-900 flex items-center justify-between gap-4">
+        {availableModels.length >= 1 ? (
+          <div className="flex items-center gap-4 flex-1">
+            <div className="flex-1">
+              <select
+                value={model1Id}
+                onChange={e => setModel1Id(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs outline-none focus:border-blue-500"
+              >
+                {availableModels.map(m => (
+                  <option key={m.id} value={m.id}>{m.displayName}</option>
+                ))}
+              </select>
+            </div>
+            <div className="text-gray-500 font-bold">VS</div>
+            <div className="flex-1">
+              <select
+                value={model2Id}
+                onChange={e => setModel2Id(e.target.value)}
+                className="w-full bg-gray-800 border border-gray-700 rounded px-2 py-1 text-xs outline-none focus:border-green-500"
+              >
+                {availableModels.length < 2 ? (
+                  <option value="">Başka aktif model yok</option>
+                ) : (
+                  availableModels.map(m => (
+                    <option key={m.id} value={m.id}>{m.displayName}</option>
+                  ))
+                )}
+              </select>
+            </div>
           </div>
-          <div>
-            <label className="block text-sm text-gray-400 mb-2">Model 2</label>
-            <select
-              value={model2.id}
-              onChange={(e) => setModel2(models.find(m => m.id === e.target.value) || null)}
-              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-white text-sm"
-            >
-              {models.map(m => (
-                <option key={m.id} value={m.id}>{m.displayName}</option>
-              ))}
-            </select>
+        ) : (
+          <div className="flex-1 text-xs text-yellow-500">
+            ⚠️ Hiç aktif model bulunamadı. Lütfen AI Ayarları'ndan modelleri aktif edin.
           </div>
-        </div>
+        )}
+        <button onClick={onClose} className="p-1 hover:bg-gray-800 rounded text-gray-500">✕</button>
+      </div>
 
-        {/* Comparison Table */}
-        <div className="p-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-gray-700">
-                <th className="text-left py-2 text-gray-400">Özellik</th>
-                <th className="text-center py-2 text-blue-400">{model1.displayName}</th>
-                <th className="text-center py-2 text-green-400">{model2.displayName}</th>
-              </tr>
-            </thead>
-            <tbody className="text-white">
-              {/* Boyut */}
-              <tr className="border-b border-gray-700/50">
-                <td className="py-3 text-gray-400">📦 Dosya Boyutu</td>
-                <td className="text-center">{model1.size}</td>
-                <td className="text-center">{model2.size}</td>
-              </tr>
+      {/* Comparison Chat Area */}
+      <div className="flex-1 flex overflow-hidden">
+        <ChatColumn
+          modelId={model1Id}
+          messages={messages1}
+          metrics={metrics1}
+          endRef={messagesEndRef1}
+          color="text-blue-400"
+        />
+        <ChatColumn
+          modelId={model2Id}
+          messages={messages2}
+          metrics={metrics2}
+          endRef={messagesEndRef2}
+          color="text-green-400"
+        />
+      </div>
 
-              {/* Parametreler */}
-              {(model1.parameters || model2.parameters) && (
-                <tr className="border-b border-gray-700/50">
-                  <td className="py-3 text-gray-400">🔢 Parametreler</td>
-                  <td className="text-center">{model1.parameters || '-'}</td>
-                  <td className="text-center">{model2.parameters || '-'}</td>
-                </tr>
-              )}
-
-              {/* Quantization */}
-              <tr className="border-b border-gray-700/50">
-                <td className="py-3 text-gray-400">⚙️ Quantization</td>
-                <td className="text-center">{model1.quantization}</td>
-                <td className="text-center">{model2.quantization}</td>
-              </tr>
-
-              {/* VRAM (8K) */}
-              <tr className="border-b border-gray-700/50">
-                <td className="py-3 text-gray-400">🎮 VRAM (8K context)</td>
-                <td className="text-center">{Math.round(calculateVRAM(model1, 8192))} GB</td>
-                <td className="text-center">{Math.round(calculateVRAM(model2, 8192))} GB</td>
-              </tr>
-
-              {/* VRAM (16K) */}
-              <tr className="border-b border-gray-700/50">
-                <td className="py-3 text-gray-400">🎮 VRAM (16K context)</td>
-                <td className="text-center">{Math.round(calculateVRAM(model1, 16384))} GB</td>
-                <td className="text-center">{Math.round(calculateVRAM(model2, 16384))} GB</td>
-              </tr>
-
-              {/* Tahmini Hız */}
-              <tr className="border-b border-gray-700/50">
-                <td className="py-3 text-gray-400">⚡ Tahmini Hız</td>
-                <td className="text-center">{estimateSpeed(model1)} token/s</td>
-                <td className="text-center">{estimateSpeed(model2)} token/s</td>
-              </tr>
-
-              {/* Kalite */}
-              <tr className="border-b border-gray-700/50">
-                <td className="py-3 text-gray-400">⭐ Kalite</td>
-                <td className="text-center">{'⭐'.repeat(getQualityStars(model1))}</td>
-                <td className="text-center">{'⭐'.repeat(getQualityStars(model2))}</td>
-              </tr>
-
-              {/* Öneri */}
-              <tr>
-                <td className="py-3 text-gray-400">💡 Öneri</td>
-                <td className="text-center text-xs">
-                  {calculateVRAM(model1, 8192) < 8 ? '✅ 12GB VRAM için uygun' : '⚠️ Yüksek VRAM gerekir'}
-                </td>
-                <td className="text-center text-xs">
-                  {calculateVRAM(model2, 8192) < 8 ? '✅ 12GB VRAM için uygun' : '⚠️ Yüksek VRAM gerekir'}
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer */}
-        <div className="p-4 border-t border-gray-700 bg-gray-900/50">
-          <div className="text-xs text-gray-400 space-y-1">
-            <p>💡 <strong>İpucu:</strong> Küçük modeller daha hızlı, büyük modeller daha kaliteli cevap verir.</p>
-            <p>🎮 <strong>VRAM:</strong> Senin sistemin 12 GB VRAM'e sahip (RTX 5070).</p>
-            <p>⚡ <strong>Hız:</strong> Tahmini değerler, gerçek hız sistem ve ayarlara göre değişir.</p>
-          </div>
+      {/* Input Area */}
+      <div className="p-4 border-t border-gray-700 bg-gray-900">
+        <div className="relative">
+          <textarea
+            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 pr-12 text-sm outline-none focus:border-blue-500 transition-colors resize-none"
+            placeholder="İki modeli karşılaştırmak için bir soru yazın..."
+            rows={2}
+            value={input}
+            onChange={e => setInput(e.target.value)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleSend();
+              }
+            }}
+          />
+          <button
+            onClick={handleSend}
+            disabled={isComparing || !input.trim()}
+            className="absolute right-3 bottom-3 p-2 bg-blue-600 hover:bg-blue-700 rounded-md disabled:opacity-50 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+            </svg>
+          </button>
         </div>
       </div>
     </div>
   );
 }
+

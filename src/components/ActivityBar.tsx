@@ -85,6 +85,19 @@ export default function ActivityBar({ activeView, onViewChange, onSettingsClick 
       name: t('activity.docker'),
       icon: '🐳',
       shortcut: 'Ctrl+Shift+K'
+    },
+    {
+      id: 'compare',
+      name: 'Model Comparison',
+      icon: '⚖️',
+      shortcut: 'Ctrl+Shift+C'
+    },
+    {
+      id: 'mcp',
+
+      name: 'MCP Servers',
+      icon: '🔌',
+      shortcut: 'Ctrl+Shift+M'
     }
   ];
 
@@ -108,12 +121,12 @@ export default function ActivityBar({ activeView, onViewChange, onSettingsClick 
       onSettingsClick();
       return;
     }
-    
+
     // Clear badge when clicking on an item
     if (badges[id] && badges[id] > 0) {
       setBadges(prev => ({ ...prev, [id]: 0 }));
     }
-    
+
     if (activeView === id) {
       // If clicking the same item, toggle it off
       onViewChange('');
@@ -137,8 +150,8 @@ export default function ActivityBar({ activeView, onViewChange, onSettingsClick 
           flex items-center justify-center relative
           transition-all duration-200 ease-in-out cursor-pointer
           rounded hover:bg-[var(--color-hover)]
-          ${activeView === activity.id 
-            ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]' 
+          ${activeView === activity.id
+            ? 'bg-[var(--color-primary)]/20 text-[var(--color-primary)]'
             : 'text-[var(--color-textSecondary)] hover:text-[var(--color-text)]'
           }
         `}
@@ -146,7 +159,7 @@ export default function ActivityBar({ activeView, onViewChange, onSettingsClick 
         title={`${activity.name}${activity.shortcut ? ` (${activity.shortcut})` : ''}`}
       >
         <span className={isBottom ? 'text-lg' : 'text-xl'}>{activity.icon}</span>
-        
+
         {/* Badge */}
         {activity.badge && activity.badge > 0 && (
           <span className={`absolute -top-0.5 -right-0.5 ${isBottom ? 'w-3 h-3 text-[8px]' : 'w-3.5 h-3.5 text-[9px]'} bg-[var(--color-primary)] text-white rounded-full flex items-center justify-center pointer-events-none`}>

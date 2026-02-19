@@ -7,6 +7,8 @@ import ApiTesting from './ApiTesting';
 import TaskManager from './TaskManager';
 import DockerIntegration from './DockerIntegration';
 import AccountsPanel from './AccountsPanel';
+import { MCPPanel } from './MCPPanel';
+
 import { useLanguage } from '../contexts/LanguageContext';
 // import { FileIndex } from '../types/index';
 
@@ -15,7 +17,7 @@ interface SidePanelProps {
   isVisible: boolean;
   width: number;
   onWidthChange: (width: number) => void;
-  
+
   // File Manager props
   projectPath: string;
   files: string[];
@@ -25,7 +27,7 @@ interface SidePanelProps {
   onFileDelete: (filePath: string) => void;
   onFileRename: (oldPath: string, newPath: string) => void;
   onRefresh: () => void;
-  
+
   // Workspace Manager props
   onWorkspaceSelect?: (path: string) => void;
 }
@@ -77,7 +79,7 @@ export default function SidePanel({
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
         <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('search.title')}</h2>
-        
+
         {/* Search Input */}
         <div className="space-y-1.5">
           <input
@@ -174,7 +176,7 @@ export default function SidePanel({
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
         <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('git.title')}</h2>
-        
+
         {/* Repository Info */}
         <div className="mb-3">
           <div className="flex items-center gap-2 text-sm">
@@ -206,7 +208,7 @@ export default function SidePanel({
               <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('git.changes')}</h3>
               <span className="text-xs bg-[var(--color-primary)] text-white px-2 py-0.5 rounded">3</span>
             </div>
-            
+
             <div className="space-y-0.5">
               {['src/App.tsx', 'src/components/ActivityBar.tsx', 'package.json'].map(file => (
                 <div key={file} className="flex items-center gap-2 px-2 py-1.5 hover:bg-[var(--color-hover)] rounded cursor-pointer">
@@ -230,7 +232,7 @@ export default function SidePanel({
               <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('git.stagedChanges')}</h3>
               <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">1</span>
             </div>
-            
+
             <div className="space-y-0.5">
               <div className="flex items-center gap-2 px-2 py-1.5 hover:bg-[var(--color-hover)] rounded cursor-pointer">
                 <span className="text-green-500 text-xs">A</span>
@@ -251,7 +253,7 @@ export default function SidePanel({
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
         <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('activity.runDebug')}</h2>
-        
+
         {/* Run Button */}
         <button className="w-full px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors mb-2">
           ▶️ {t('common.run')}
@@ -307,7 +309,7 @@ export default function SidePanel({
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
         <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('settings.title')}</h2>
-        
+
         {/* Search Settings */}
         <input
           type="text"
@@ -375,7 +377,7 @@ export default function SidePanel({
         return (
           <WorkspaceManager
             currentProjectPath={projectPath}
-            onWorkspaceSelect={onWorkspaceSelect || (() => {})}
+            onWorkspaceSelect={onWorkspaceSelect || (() => { })}
           />
         );
       case 'database':
@@ -386,6 +388,12 @@ export default function SidePanel({
         return <TaskManager />;
       case 'docker':
         return <DockerIntegration />;
+      case 'mcp':
+        return <MCPPanel />;
+      case 'compare':
+        return <div className="p-4 text-xs text-neutral-400">Model karşılaştırma modu aktif. Ana panelden devam edin.</div>;
+
+
       default:
         return null;
     }
@@ -394,7 +402,7 @@ export default function SidePanel({
   if (!isVisible || !activeView) return null;
 
   return (
-    <div 
+    <div
       className="h-full bg-[var(--color-surface)] border-r border-[var(--color-border)] flex"
       style={{ width: `${width}px` }}
     >
@@ -404,24 +412,24 @@ export default function SidePanel({
       </div>
 
       {/* Resize Handle */}
-      <div 
+      <div
         className="w-1 bg-transparent hover:bg-[var(--color-primary)] cursor-ew-resize transition-colors flex-shrink-0"
         onMouseDown={(e) => {
           e.preventDefault();
           const startX = e.clientX;
           const startWidth = width;
-          
+
           const handleMouseMove = (moveEvent: MouseEvent) => {
             const newWidth = startWidth + (moveEvent.clientX - startX);
             const clampedWidth = Math.max(200, Math.min(600, newWidth));
             onWidthChange(clampedWidth);
           };
-          
+
           const handleMouseUp = () => {
             document.removeEventListener('mousemove', handleMouseMove);
             document.removeEventListener('mouseup', handleMouseUp);
           };
-          
+
           document.addEventListener('mousemove', handleMouseMove);
           document.addEventListener('mouseup', handleMouseUp);
         }}
