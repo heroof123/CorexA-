@@ -26,7 +26,6 @@ export function useUIState() {
     const [showCustomizeLayout, setShowCustomizeLayout] = useState(false);
     const [showDeveloperTools, setShowDeveloperTools] = useState(false);
     const [showCodeSnippets, setShowCodeSnippets] = useState(false);
-    const [showCodeAnalysis, setShowCodeAnalysis] = useState(false);
     const [showAdvancedTheming, setShowAdvancedTheming] = useState(false);
     const [showRemoteDevelopment, setShowRemoteDevelopment] = useState(false);
     const [showEnhancedAI, setShowEnhancedAI] = useState(false);
@@ -34,6 +33,7 @@ export function useUIState() {
     const [showSymbolSearch, setShowSymbolSearch] = useState(false);
     const [showModelComparison, setShowModelComparison] = useState(false);
     const [comparisonMode, setComparisonMode] = useState(false);
+    const [showCodeUniverse, setShowCodeUniverse] = useState(false);
 
 
     // Split view dosyaları
@@ -110,8 +110,6 @@ export function useUIState() {
         setShowDeveloperTools,
         showCodeSnippets,
         setShowCodeSnippets,
-        showCodeAnalysis,
-        setShowCodeAnalysis,
         showAdvancedTheming,
         setShowAdvancedTheming,
         showRemoteDevelopment,
@@ -126,6 +124,8 @@ export function useUIState() {
         setShowModelComparison,
         comparisonMode,
         setComparisonMode,
+        showCodeUniverse,
+        setShowCodeUniverse,
 
 
         // Split view

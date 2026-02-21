@@ -1267,7 +1267,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
       <div className={`${selectedModelForConfig ? 'w-2/3' : 'w-full'} transition-all`}>
         <div className="mb-3">
           <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-white">📦 GGUF Model Tarayıcı</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text)]">📦 GGUF Model Tarayıcı</h3>
             <a href="https://huggingface.co/models?library=gguf&sort=trending" target="_blank" rel="noopener noreferrer" className="text-xs text-blue-400 hover:text-blue-300">
               🤗 Tüm Modeller
             </a>
@@ -1275,7 +1275,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         </div>
 
         <div className="mb-3 flex gap-2">
-          <input type="text" value={downloadFolder || 'Klasör seçilmedi'} readOnly className="flex-1 px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-xs" placeholder="İndirme klasörü" />
+          <input type="text" value={downloadFolder || 'Klasör seçilmedi'} readOnly className="flex-1 px-2 py-1.5 bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text)]" placeholder="İndirme klasörü" />
           <button onClick={selectDownloadFolder} className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 rounded text-xs whitespace-nowrap">📁 Klasör</button>
           <button onClick={selectLocalFile} className="px-3 py-1.5 bg-green-600 hover:bg-green-700 rounded text-xs whitespace-nowrap">📄 Dosya Ekle</button>
           <button
@@ -1288,7 +1288,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
             onClick={() => setShowComparison(true)}
             disabled={models.filter(m => m.isDownloaded).length < 2}
             className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${models.filter(m => m.isDownloaded).length >= 2
-              ? 'bg-orange-600 hover:bg-orange-700 text-white'
+              ? 'bg-orange-600 hover:bg-orange-700 text-[var(--color-text)]'
               : 'bg-gray-600 text-gray-400 cursor-not-allowed'
               }`}
             title="İki model karşılaştır"
@@ -1299,7 +1299,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
             onClick={() => setShowCleanupModal(true)}
             disabled={models.length === 0}
             className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${models.length > 0
-              ? 'bg-cyan-600 hover:bg-cyan-700 text-white'
+              ? 'bg-[var(--color-background)] border-[var(--color-border)] text-[var(--color-text)]'
               : 'bg-gray-600 text-gray-400 cursor-not-allowed'
               }`}
             title="Model temizlik ve disk yönetimi"
@@ -1310,7 +1310,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
             onClick={() => unloadFromGPU()}
             disabled={!activeGpuModel}
             className={`px-3 py-1.5 rounded text-xs whitespace-nowrap ${activeGpuModel
-              ? 'bg-red-600 hover:bg-red-700 text-white'
+              ? 'bg-red-600 hover:bg-red-700 text-[var(--color-text)]'
               : 'bg-gray-600 text-gray-400 cursor-not-allowed'
               }`}
             title={activeGpuModel ? "GPU'dan model(leri) kaldır" : "GPU'da model yok"}
@@ -1328,7 +1328,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 <button
                   onClick={() => setFilterBy('all')}
                   className={`px-2 py-1 rounded text-xs ${filterBy === 'all'
-                    ? 'bg-blue-600 text-white'
+                    ? 'bg-blue-600 text-[var(--color-text)]'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
@@ -1337,7 +1337,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 <button
                   onClick={() => setFilterBy('favorites')}
                   className={`px-2 py-1 rounded text-xs ${filterBy === 'favorites'
-                    ? 'bg-yellow-600 text-white'
+                    ? 'bg-yellow-600 text-[var(--color-text)]'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
@@ -1346,7 +1346,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 <button
                   onClick={() => setFilterBy('downloaded')}
                   className={`px-2 py-1 rounded text-xs ${filterBy === 'downloaded'
-                    ? 'bg-green-600 text-white'
+                    ? 'bg-green-600 text-[var(--color-text)]'
                     : 'bg-gray-700 text-gray-300 hover:bg-gray-600'
                     }`}
                 >
@@ -1478,7 +1478,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                       {model.parameters && <span className="px-1.5 py-0.5 bg-purple-700 rounded">{model.parameters}</span>}
                       {/* 🆕 Son Kullanım */}
                       {model.lastUsed && (
-                        <span className="px-1.5 py-0.5 bg-gray-600 rounded text-gray-300" title="Son kullanım">
+                        <span className="px-1.5 py-0.5 bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-textSecondary)]" title="Son kullanım">
                           🕐 {new Date(model.lastUsed).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short' })}
                         </span>
                       )}
@@ -1565,7 +1565,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                           disabled={isBenchmarking}
                           className={`px-2 py-1 rounded text-xs whitespace-nowrap ${isBenchmarking
                             ? 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                            : 'bg-yellow-600 hover:bg-yellow-700 text-white'
+                            : 'bg-yellow-600 hover:bg-yellow-700 text-[var(--color-text)]'
                             }`}
                           title="Hız testi yap"
                         >
@@ -1604,14 +1604,14 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
       {/* Sağ Panel - Model Ayarları */}
       {selectedModelForConfig && (
-        <div className="w-1/3 bg-gray-800 rounded-lg border border-gray-700 p-2.5 flex flex-col max-h-[calc(100vh-200px)]">
+        <div className="w-1/3 bg-[var(--color-background)] rounded-lg border border-[var(--color-border)] p-2.5 flex flex-col max-h-[calc(100vh-200px)]">
           <div className="flex items-center justify-between mb-2.5">
-            <h3 className="text-xs font-semibold text-white">⚙️ Model Ayarları</h3>
-            <button onClick={() => setSelectedModelForConfig(null)} className="text-gray-400 hover:text-white text-sm">✕</button>
+            <h3 className="text-xs font-semibold text-[var(--color-text)]">⚙️ Model Ayarları</h3>
+            <button onClick={() => setSelectedModelForConfig(null)} className="text-gray-400 hover:text-[var(--color-text)] text-sm">✕</button>
           </div>
 
           <div className="mb-1.5">
-            <h4 className="text-xs font-medium text-white truncate">{selectedModelForConfig.displayName}</h4>
+            <h4 className="text-xs font-medium text-[var(--color-text)] truncate">{selectedModelForConfig.displayName}</h4>
             <p className="text-xs text-gray-400 truncate">{selectedModelForConfig.description}</p>
           </div>
 
@@ -1622,7 +1622,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 <span className="text-xs font-semibold text-green-400">📊 Model Metadata</span>
                 <button
                   onClick={() => setModelMetadata(null)}
-                  className="text-gray-400 hover:text-white text-xs"
+                  className="text-gray-400 hover:text-[var(--color-text)] text-xs"
                 >
                   ✕
                 </button>
@@ -1631,7 +1631,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 {Object.entries(modelMetadata).slice(0, 8).map(([key, value]) => (
                   <div key={key} className="flex justify-between gap-2">
                     <span className="text-gray-400 truncate text-xs">{key}:</span>
-                    <span className="text-white font-mono text-xs break-all text-right">
+                    <span className="text-[var(--color-text)] font-mono text-xs break-all text-right">
                       {typeof value === 'object' ? JSON.stringify(value).slice(0, 25) + '...' : String(value).slice(0, 25)}
                     </span>
                   </div>
@@ -1651,7 +1651,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               onClick={() => setActiveTab('basic')}
               className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'basic'
                 ? 'text-blue-400 border-b-2 border-blue-400'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-[var(--color-text)]'
                 }`}
             >
               🎯 Temel
@@ -1660,7 +1660,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               onClick={() => setActiveTab('advanced')}
               className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'advanced'
                 ? 'text-purple-400 border-b-2 border-purple-400'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-[var(--color-text)]'
                 }`}
             >
               🔬 Gelişmiş
@@ -1669,7 +1669,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               onClick={() => setActiveTab('logs')}
               className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'logs'
                 ? 'text-yellow-400 border-b-2 border-yellow-400'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-[var(--color-text)]'
                 }`}
             >
               📈 Loglar
@@ -1678,7 +1678,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               onClick={() => setActiveTab('history')}
               className={`px-1.5 py-1 text-xs font-medium transition-colors whitespace-nowrap ${activeTab === 'history'
                 ? 'text-pink-400 border-b-2 border-pink-400'
-                : 'text-gray-400 hover:text-white'
+                : 'text-gray-400 hover:text-[var(--color-text)]'
                 }`}
             >
               💬 Geçmiş
@@ -1687,9 +1687,9 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
           {/* GPU Memory Göstergesi - Her iki sekmede de göster */}
           {gpuMemory && gpuMemory.available && (
-            <div className="mb-2 p-1.5 bg-gray-900 rounded-lg border border-gray-700">
+            <div className="mb-2 p-1.5 bg-[var(--color-surface)] rounded-lg border border-[var(--color-border)]">
               <div className="flex items-center justify-between mb-1.5">
-                <span className="text-xs font-medium text-white">🎮 GPU</span>
+                <span className="text-xs font-medium text-[var(--color-text)]">🎮 GPU</span>
                 <span className="text-xs text-gray-400">
                   {gpuMemory.used_vram_gb.toFixed(1)} / {gpuMemory.total_vram_gb.toFixed(1)} GB
                 </span>
@@ -1710,19 +1710,19 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <div className="space-y-0.5 text-xs">
                 <div className="flex justify-between text-gray-400">
                   <span>Kullanım:</span>
-                  <span className="font-semibold text-white">{gpuMemory.usage_percent.toFixed(1)}%</span>
+                  <span className="font-semibold text-[var(--color-text)]">{gpuMemory.usage_percent.toFixed(1)}%</span>
                 </div>
                 <div className="flex justify-between text-gray-400">
                   <span>Model:</span>
-                  <span className="text-white">{gpuMemory.model_size_gb.toFixed(1)} GB</span>
+                  <span className="text-[var(--color-text)]">{gpuMemory.model_size_gb.toFixed(1)} GB</span>
                 </div>
                 <div className="flex justify-between text-gray-400">
                   <span>KV Cache:</span>
-                  <span className="text-white">{gpuMemory.kv_cache_size_gb.toFixed(1)} GB</span>
+                  <span className="text-[var(--color-text)]">{gpuMemory.kv_cache_size_gb.toFixed(1)} GB</span>
                 </div>
                 <div className="flex justify-between text-gray-400">
                   <span>Boş:</span>
-                  <span className="text-white">{gpuMemory.free_vram_gb.toFixed(1)} GB</span>
+                  <span className="text-[var(--color-text)]">{gpuMemory.free_vram_gb.toFixed(1)} GB</span>
                 </div>
               </div>
             </div>
@@ -1733,12 +1733,12 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
             <div className="space-y-2">
               {/* Context Length - Preset Butonlar */}
               <div>
-                <label className="block text-xs font-medium mb-1.5 text-white">
+                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text)]">
                   📝 Bağlam Uzunluğu
                 </label>
                 <div className="flex items-center justify-between mb-1.5">
                   <span className="text-xs text-gray-400">Seçili:</span>
-                  <span className="text-xs font-semibold text-white">{contextLength.toLocaleString()}</span>
+                  <span className="text-xs font-semibold text-[var(--color-text)]">{contextLength.toLocaleString()}</span>
                 </div>
 
                 {/* Preset Butonlar */}
@@ -1755,7 +1755,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                       key={preset.value}
                       onClick={() => setContextLength(preset.value)}
                       className={`px-2 py-1.5 rounded text-xs font-medium transition-all ${contextLength === preset.value
-                        ? 'bg-blue-600 text-white border-2 border-blue-400'
+                        ? 'bg-blue-600 text-[var(--color-text)] border-2 border-blue-400'
                         : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
                         }`}
                     >
@@ -1775,7 +1775,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
               {/* 🆕 Output Mode - Cevap Uzunluğu */}
               <div>
-                <label className="block text-xs font-medium mb-1.5 text-white">
+                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text)]">
                   📤 Cevap Uzunluğu (Output)
                 </label>
                 <div className="grid grid-cols-3 gap-1.5">
@@ -1788,7 +1788,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                       key={mode.value}
                       onClick={() => setOutputMode(mode.value as any)}
                       className={`px-2 py-2 rounded text-xs font-medium transition-all ${outputMode === mode.value
-                        ? `bg-${mode.color}-600 text-white border-2 border-${mode.color}-400`
+                        ? `bg-${mode.color}-600 text-[var(--color-text)] border-2 border-${mode.color}-400`
                         : 'bg-gray-700 text-gray-300 border border-gray-600 hover:bg-gray-600'
                         }`}
                     >
@@ -1817,7 +1817,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {gpuBackendInfo && (
                 <div className="p-3 bg-gradient-to-br from-purple-900/30 to-blue-900/30 border border-purple-500/30 rounded-lg">
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-semibold text-white flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-[var(--color-text)] flex items-center gap-2">
                       ⚡ GPU Hızlandırma
                     </h4>
                     <span className={`text-xs px-2 py-0.5 rounded ${gpuBackendInfo.backend === 'CUDA' ? 'bg-green-500/20 text-green-400' :
@@ -1831,11 +1831,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   <div className="space-y-2 text-xs">
                     <div className="flex items-start gap-2">
                       <span className="text-gray-400">Backend:</span>
-                      <span className="text-white flex-1">{gpuBackendInfo.message}</span>
+                      <span className="text-[var(--color-text)] flex-1">{gpuBackendInfo.message}</span>
                     </div>
 
                     {gpuBackendInfo.backend === 'CUDA' && (
-                      <div className="mt-3 p-2 bg-yellow-900/20 border border-yellow-500/30 rounded">
+                      <div className="bg-[var(--color-primary)]/5 border border-[var(--color-primary)]/20 rounded-lg p-4">
                         <div className="flex items-start gap-2 mb-2">
                           <span className="text-lg">ℹ️</span>
                           <div className="flex-1">
@@ -1857,7 +1857,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                               showToast('❌ Link açılamadı', 'error');
                             }
                           }}
-                          className="flex items-center justify-center gap-2 w-full mt-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded transition-colors cursor-pointer"
+                          className="flex items-center justify-center gap-2 w-full mt-2 px-3 py-2 bg-green-600 hover:bg-green-700 text-[var(--color-text)] rounded transition-colors cursor-pointer"
                         >
                           <span>📥</span>
                           <span className="font-medium">CUDA Toolkit İndir</span>
@@ -1898,11 +1898,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   <div className="space-y-1 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Model:</span>
-                      <span className="text-white font-medium truncate ml-2">{gpuInfo.name}</span>
+                      <span className="text-[var(--color-text)] font-medium truncate ml-2">{gpuInfo.name}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">VRAM:</span>
-                      <span className="text-white font-semibold">{gpuInfo.totalVRAM_GB.toFixed(1)} GB</span>
+                      <span className="text-[var(--color-text)] font-semibold">{gpuInfo.totalVRAM_GB.toFixed(1)} GB</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">Boş VRAM:</span>
@@ -1924,7 +1924,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                       'bg-red-900/20 border-red-500/30'
                   }`}>
                   <div className="flex items-center justify-between mb-1.5">
-                    <h4 className="text-xs font-semibold text-white">🎯 Bu Model İçin Öneri</h4>
+                    <h4 className="text-xs font-semibold text-[var(--color-text)]">🎯 Bu Model İçin Öneri</h4>
                     <span className={`text-xs px-1.5 py-0.5 rounded ${backendRecommendation.expectedPerformance === 'excellent' ? 'bg-green-500/20 text-green-400' :
                       backendRecommendation.expectedPerformance === 'good' ? 'bg-blue-500/20 text-blue-400' :
                         backendRecommendation.expectedPerformance === 'moderate' ? 'bg-yellow-500/20 text-yellow-400' :
@@ -1940,11 +1940,11 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   <div className="space-y-1 text-xs">
                     <div className="flex justify-between">
                       <span className="text-gray-400">Backend:</span>
-                      <span className="text-white font-semibold">{backendRecommendation.backend.toUpperCase()}</span>
+                      <span className="text-[var(--color-text)] font-semibold">{backendRecommendation.backend.toUpperCase()}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-400">GPU Layers:</span>
-                      <span className="text-white font-semibold">{backendRecommendation.gpuLayers}/33</span>
+                      <span className="text-[var(--color-text)] font-semibold">{backendRecommendation.gpuLayers}/33</span>
                     </div>
                     <p className="text-gray-300 mt-1.5 leading-relaxed">{backendRecommendation.reason}</p>
 
@@ -1961,7 +1961,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                     {backendRecommendation.gpuLayers > 0 && backendRecommendation.gpuLayers !== gpuLayers && (
                       <button
                         onClick={() => setGpuLayers(backendRecommendation.gpuLayers)}
-                        className="w-full mt-2 px-2 py-1 bg-cyan-600 hover:bg-cyan-700 text-white rounded text-xs transition-colors"
+                        className="w-full mt-2 px-2 py-1 bg-cyan-600 hover:bg-cyan-700 text-[var(--color-text)] rounded text-xs transition-colors"
                       >
                         ✨ Önerilen Ayarı Uygula ({backendRecommendation.gpuLayers} layer)
                       </button>
@@ -1972,12 +1972,12 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
               {/* GPU Layers */}
               <div>
-                <label className="block text-xs font-medium mb-1.5 text-white">
+                <label className="block text-xs font-medium mb-1.5 text-[var(--color-text)]">
                   🎮 GPU Offload
                 </label>
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs text-gray-400">Layers</span>
-                  <span className="text-xs font-semibold text-white">{gpuLayers}</span>
+                  <span className="text-xs font-semibold text-[var(--color-text)]">{gpuLayers}</span>
                 </div>
                 <input
                   type="range"
@@ -2003,18 +2003,18 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {/* Sistem Gereksinimleri */}
               {selectedModelForConfig.sizeBytes > 0 && (
                 <div className="p-2 bg-gray-900 rounded text-xs space-y-0.5">
-                  <div className="font-medium text-white mb-1">📊 Gereksinimler</div>
+                  <div className="font-medium text-[var(--color-text)] mb-1">📊 Gereksinimler</div>
                   {(() => {
                     const req = calculateRequirements(selectedModelForConfig, contextLength);
                     return (
                       <>
                         <div className="flex justify-between">
                           <span className="text-gray-400">💾 RAM:</span>
-                          <span className="text-white">{req.recommendedRAM} GB</span>
+                          <span className="text-[var(--color-text)]">{req.recommendedRAM} GB</span>
                         </div>
                         <div className="flex justify-between">
                           <span className="text-gray-400">🎮 VRAM:</span>
-                          <span className="text-white">{req.recommendedVRAM} GB</span>
+                          <span className="text-[var(--color-text)]">{req.recommendedVRAM} GB</span>
                         </div>
                       </>
                     );
@@ -2048,7 +2048,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <button
                 onClick={applyModelConfig}
                 disabled={isLoadingToGPU}
-                className={`w-full px-3 py-2 ${isLoadingToGPU ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded font-medium text-xs`}
+                className={`w-full px-3 py-2 ${isLoadingToGPU ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'} text-[var(--color-text)] rounded font-medium text-xs`}
               >
                 {isLoadingToGPU ? '⏳ Yükleniyor...' : '✓ Ayarları Uygula ve Kullan'}
               </button>
@@ -2057,7 +2057,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {activeGpuModel && (
                 <button
                   onClick={() => unloadFromGPU()}
-                  className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-xs"
+                  className="w-full px-3 py-2 bg-red-600 hover:bg-red-700 text-[var(--color-text)] rounded font-medium text-xs"
                 >
                   🎮 GPU'dan Kaldır
                 </button>
@@ -2071,8 +2071,8 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {/* Temperature */}
               <div>
                 <div className="flex items-center justify-between mb-0.5">
-                  <label className="text-xs font-medium text-white">🌡️ Temperature</label>
-                  <span className="text-xs font-semibold text-white">{temperature.toFixed(2)}</span>
+                  <label className="text-xs font-medium text-[var(--color-text)]">🌡️ Temperature</label>
+                  <span className="text-xs font-semibold text-[var(--color-text)]">{temperature.toFixed(2)}</span>
                 </div>
                 <input
                   type="range"
@@ -2095,8 +2095,8 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {/* Top-P */}
               <div>
                 <div className="flex items-center justify-between mb-0.5">
-                  <label className="text-xs font-medium text-white">🎲 Top-P</label>
-                  <span className="text-xs font-semibold text-white">{topP.toFixed(2)}</span>
+                  <label className="text-xs font-medium text-[var(--color-text)]">🎲 Top-P</label>
+                  <span className="text-xs font-semibold text-[var(--color-text)]">{topP.toFixed(2)}</span>
                 </div>
                 <input
                   type="range"
@@ -2118,8 +2118,8 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {/* Top-K */}
               <div>
                 <div className="flex items-center justify-between mb-0.5">
-                  <label className="text-xs font-medium text-white">🔢 Top-K</label>
-                  <span className="text-xs font-semibold text-white">{topK}</span>
+                  <label className="text-xs font-medium text-[var(--color-text)]">🔢 Top-K</label>
+                  <span className="text-xs font-semibold text-[var(--color-text)]">{topK}</span>
                 </div>
                 <input
                   type="range"
@@ -2141,8 +2141,8 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {/* Repeat Penalty */}
               <div>
                 <div className="flex items-center justify-between mb-0.5">
-                  <label className="text-xs font-medium text-white">🔁 Repeat Penalty</label>
-                  <span className="text-xs font-semibold text-white">{repeatPenalty.toFixed(2)}</span>
+                  <label className="text-xs font-medium text-[var(--color-text)]">🔁 Repeat Penalty</label>
+                  <span className="text-xs font-semibold text-[var(--color-text)]">{repeatPenalty.toFixed(2)}</span>
                 </div>
                 <input
                   type="range"
@@ -2164,8 +2164,8 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {/* Min-P */}
               <div>
                 <div className="flex items-center justify-between mb-0.5">
-                  <label className="text-xs font-medium text-white">📉 Min-P</label>
-                  <span className="text-xs font-semibold text-white">{minP.toFixed(3)}</span>
+                  <label className="text-xs font-medium text-[var(--color-text)]">📉 Min-P</label>
+                  <span className="text-xs font-semibold text-[var(--color-text)]">{minP.toFixed(3)}</span>
                 </div>
                 <input
                   type="range"
@@ -2185,7 +2185,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
 
               {/* Preset Butonları */}
               <div>
-                <label className="block text-xs font-medium mb-1 text-white">🎨 Hızlı Ayarlar</label>
+                <label className="block text-xs font-medium mb-1 text-[var(--color-text)]">🎨 Hızlı Ayarlar</label>
                 <div className="grid grid-cols-2 gap-1">
                   <button
                     onClick={() => {
@@ -2249,7 +2249,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               <button
                 onClick={applyModelConfig}
                 disabled={isLoadingToGPU}
-                className={`w-full px-3 py-1.5 ${isLoadingToGPU ? 'bg-gray-600 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'} text-white rounded font-medium text-xs`}
+                className={`w-full px-3 py-1.5 ${isLoadingToGPU ? 'bg-gray-600 cursor-not-allowed' : 'bg-purple-600 hover:bg-purple-700'} text-[var(--color-text)] rounded font-medium text-xs`}
               >
                 {isLoadingToGPU ? '⏳ Yükleniyor...' : '✓ Gelişmiş Ayarları Uygula'}
               </button>
@@ -2258,7 +2258,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
               {activeGpuModel && (
                 <button
                   onClick={() => unloadFromGPU()}
-                  className="w-full px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded font-medium text-xs"
+                  className="w-full px-3 py-1.5 bg-red-600 hover:bg-red-700 text-[var(--color-text)] rounded font-medium text-xs"
                 >
                   🎮 GPU'dan Kaldır
                 </button>
@@ -2270,7 +2270,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
           {activeTab === 'logs' && (
             <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
               <div className="flex items-center justify-between flex-shrink-0">
-                <h5 className="text-xs font-semibold text-white">📈 Performans Logları</h5>
+                <h5 className="text-xs font-semibold text-[var(--color-text)]">📈 Performans Logları</h5>
                 {performanceLogs.length > 0 && (
                   <button
                     onClick={() => {
@@ -2290,25 +2290,25 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   {performanceLogs.map((log, index) => (
                     <div key={index} className="p-2 bg-gray-900 rounded text-xs">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-white truncate">{log.modelName}</span>
+                        <span className="font-semibold text-[var(--color-text)] truncate">{log.modelName}</span>
                         <span className="text-green-400 font-bold">{log.tokensPerSecond.toFixed(1)} t/s</span>
                       </div>
                       <div className="space-y-0.5 text-gray-400">
                         <div className="flex justify-between">
                           <span>Context:</span>
-                          <span className="text-white">{log.contextLength.toLocaleString()}</span>
+                          <span className="text-[var(--color-text)]">{log.contextLength.toLocaleString()}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>GPU Layers:</span>
-                          <span className="text-white">{log.gpuLayers}</span>
+                          <span className="text-[var(--color-text)]">{log.gpuLayers}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Temperature:</span>
-                          <span className="text-white">{log.temperature.toFixed(2)}</span>
+                          <span className="text-[var(--color-text)]">{log.temperature.toFixed(2)}</span>
                         </div>
                         <div className="flex justify-between">
                           <span>Tarih:</span>
-                          <span className="text-white text-xs">
+                          <span className="text-[var(--color-text)] text-xs">
                             {new Date(log.timestamp).toLocaleString('tr-TR', {
                               day: '2-digit',
                               month: '2-digit',
@@ -2337,7 +2337,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
           {activeTab === 'history' && (
             <div className="space-y-2 flex-1 overflow-hidden flex flex-col">
               <div className="flex items-center justify-between flex-shrink-0">
-                <h5 className="text-xs font-semibold text-white">💬 Konuşma Geçmişi</h5>
+                <h5 className="text-xs font-semibold text-[var(--color-text)]">💬 Konuşma Geçmişi</h5>
                 {conversationHistory.length > 0 && (
                   <button
                     onClick={() => {
@@ -2357,7 +2357,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                   {conversationHistory.map((entry, index) => (
                     <div key={index} className="p-2 bg-gray-900 rounded text-xs">
                       <div className="flex items-center justify-between mb-1">
-                        <span className="font-semibold text-white truncate">{entry.modelName}</span>
+                        <span className="font-semibold text-[var(--color-text)] truncate">{entry.modelName}</span>
                         <span className="text-gray-400 text-xs">
                           {new Date(entry.timestamp).toLocaleDateString('tr-TR', {
                             day: '2-digit',
@@ -2405,8 +2405,8 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
         <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setShowSearchModal(false)}>
           <div className="bg-gray-800 rounded-lg p-4 max-w-3xl w-full max-h-[80vh] overflow-y-auto m-4" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-lg font-semibold text-white">🤗 Hugging Face Model Ara</h3>
-              <button onClick={() => setShowSearchModal(false)} className="text-gray-400 hover:text-white text-xl">✕</button>
+              <h3 className="text-lg font-semibold text-[var(--color-text)]">🤗 Hugging Face Model Ara</h3>
+              <button onClick={() => setShowSearchModal(false)} className="text-gray-400 hover:text-[var(--color-text)] text-xl">✕</button>
             </div>
 
             <div className="mb-3">
@@ -2415,7 +2415,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 placeholder="Model ara... (örn: tinyllama, qwen, phi, llama)"
                 value={hfSearchQuery}
                 onChange={(e) => setHfSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-[var(--color-text)] placeholder-gray-400 focus:border-blue-500 focus:outline-none"
                 autoFocus
               />
               {isSearching && <div className="mt-2 text-sm text-gray-400">🔄 Aranıyor...</div>}
@@ -2424,15 +2424,15 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
             {hfSearchResults.length > 0 ? (
               <div className="space-y-2">
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-sm font-semibold text-white">📋 {hfSearchResults.length} sonuç bulundu</span>
-                  <button onClick={() => setHfSearchResults([])} className="text-xs text-gray-400 hover:text-white">Temizle</button>
+                  <span className="text-sm font-semibold text-[var(--color-text)]">📋 {hfSearchResults.length} sonuç bulundu</span>
+                  <button onClick={() => setHfSearchResults([])} className="text-xs text-gray-400 hover:text-[var(--color-text)]">Temizle</button>
                 </div>
                 <div className="space-y-2 max-h-96 overflow-y-auto">
                   {hfSearchResults.map(model => (
-                    <div key={model.id} className="p-3 rounded border border-blue-500/30 bg-blue-900/10 hover:bg-blue-900/20 transition-colors">
+                    <div key={model.id} className="bg-[var(--color-surface)] border border-[var(--color-border)] p-4 rounded-xl shadow-sm hover:shadow-md transition-all">
                       <div className="flex items-start justify-between gap-3">
                         <div className="flex-1 min-w-0">
-                          <h5 className="font-semibold text-white text-sm mb-1">{model.displayName}</h5>
+                          <h5 className="font-semibold text-[var(--color-text)] text-sm mb-1">{model.displayName}</h5>
                           <p className="text-gray-400 text-xs mb-2">{model.description}</p>
                           <div className="flex flex-wrap gap-1">
                             <span className="px-2 py-0.5 bg-gray-700 rounded text-xs">{model.size}</span>
@@ -2510,7 +2510,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 placeholder="Model adı veya açıklama..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded text-sm text-white placeholder-gray-400 focus:border-blue-500 focus:outline-none"
+                className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] placeholder-gray-400 focus:border-blue-500 focus:outline-none"
                 autoFocus
               />
             </div>
@@ -2523,7 +2523,7 @@ export default function GGUFModelBrowser({ onModelSelect }: GGUFModelBrowserProp
                 <select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as any)}
-                  className="w-full px-2 py-1.5 bg-gray-700 border border-gray-600 rounded text-sm text-white focus:border-blue-500 focus:outline-none"
+                  className="w-full px-2 py-1.5 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-sm text-[var(--color-text)] focus:border-blue-500 focus:outline-none"
                 >
                   <option value="name">İsim</option>
                   <option value="size">Boyut</option>

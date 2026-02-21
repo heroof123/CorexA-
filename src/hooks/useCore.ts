@@ -3,12 +3,12 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { emit, listen, UnlistenFn } from '@tauri-apps/api/event';
-import { 
-  CoreMessage, 
-  GUIMessage, 
+import {
+  CoreMessage,
+  GUIMessage,
   createChatRequest,
   createStopGeneration,
-  isStreamingMessage 
+  isStreamingMessage
 } from '../core/protocol';
 
 /**
@@ -20,43 +20,52 @@ export function useCore() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [currentRequestId, setCurrentRequestId] = useState<string | null>(null);
   const unlistenRef = useRef<UnlistenFn | null>(null);
-  
+
   // 🔥 FIXED 2025: Batch streaming/token messages to prevent excessive re-renders
   const pendingTokenRef = useRef<CoreMessage | null>(null);
   const tokenBatchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  
+
   // Listen to Core messages
   useEffect(() => {
     const setupListener = async () => {
       console.log('🎧 useCore: Setting up Core message listener...');
-      
+
       const unlisten = await listen<CoreMessage>('core-message', (event) => {
         const message = event.payload;
         console.log(`📨 useCore: Received Core message: ${message.messageType}`);
-        
+
         // 🔥 Batch streaming/token messages - don't setState for every token
         if (message.messageType === 'streaming/token') {
           pendingTokenRef.current = message;
-          
+
           // Clear existing timeout
           if (tokenBatchTimeoutRef.current) {
             clearTimeout(tokenBatchTimeoutRef.current);
           }
-          
-        // 🔥 Batch after 200ms instead of immediate setState
+
+          // 🔥 Batch after 200ms instead of immediate setState
           tokenBatchTimeoutRef.current = setTimeout(() => {
             if (pendingTokenRef.current) {
               setCoreMessages(prev => [...prev, pendingTokenRef.current!]);
               pendingTokenRef.current = null;
             }
           }, 200);
-          
+
           return; // Don't process immediately
         }
-        
-        // For non-token messages, add immediately
-        setCoreMessages(prev => [...prev, message]);
-        
+
+        // For non-token messages, flush pending token first
+        if (tokenBatchTimeoutRef.current) {
+          clearTimeout(tokenBatchTimeoutRef.current);
+          if (pendingTokenRef.current) {
+            setCoreMessages(prev => [...prev, pendingTokenRef.current!, message]);
+            pendingTokenRef.current = null;
+          } else {
+            setCoreMessages(prev => [...prev, message]);
+          }
+        } else {
+          setCoreMessages(prev => [...prev, message]);
+        }
         // Track streaming state
         if (isStreamingMessage(message)) {
           if (message.messageType === 'streaming/start') {
@@ -68,13 +77,13 @@ export function useCore() {
           }
         }
       });
-      
+
       unlistenRef.current = unlisten;
       console.log('✅ useCore: Listener setup complete');
     };
-    
+
     setupListener();
-    
+
     // Cleanup
     return () => {
       if (unlistenRef.current) {
@@ -86,7 +95,7 @@ export function useCore() {
       }
     };
   }, []);
-  
+
   /**
    * Send message to Core
    */
@@ -99,7 +108,7 @@ export function useCore() {
       throw error;
     }
   }, []);
-  
+
   /**
    * Send chat request
    */
@@ -116,7 +125,7 @@ export function useCore() {
     await sendMessage(message);
     return message.data.requestId;
   }, [sendMessage]);
-  
+
   /**
    * Stop current generation
    */
@@ -125,24 +134,24 @@ export function useCore() {
       console.warn('⚠️ useCore: No active request to stop');
       return;
     }
-    
+
     const message = createStopGeneration(currentRequestId);
     await sendMessage(message);
   }, [currentRequestId, sendMessage]);
-  
+
   /**
    * Clear messages
    */
   const clearMessages = useCallback(() => {
     setCoreMessages([]);
   }, []);
-  
+
   return {
     // State
     coreMessages,
     isStreaming,
     currentRequestId,
-    
+
     // Actions
     sendMessage,
     sendChatRequest,

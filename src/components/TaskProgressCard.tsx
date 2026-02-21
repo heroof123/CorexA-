@@ -1,4 +1,4 @@
-import { AgentTask, TaskStep, TaskStatus } from "../types/agent";
+import { AgentTask, TaskStep } from "../types/agent.ts";
 
 interface TaskProgressCardProps {
     task: AgentTask;
@@ -25,8 +25,8 @@ export function TaskProgressCard({ task }: TaskProgressCardProps) {
                     </div>
                 </div>
                 <div className={`px-2 py-1 rounded text-xs font-bold ${task.status === "completed" ? "bg-green-900/30 text-green-400 border border-green-800" :
-                        task.status === "failed" ? "bg-red-900/30 text-red-400 border border-red-800" :
-                            "bg-blue-900/30 text-blue-400 border border-blue-800 animate-pulse"
+                    task.status === "failed" ? "bg-red-900/30 text-red-400 border border-red-800" :
+                        "bg-blue-900/30 text-blue-400 border border-blue-800 animate-pulse"
                     }`}>
                     {task.status.toUpperCase()}
                 </div>
@@ -58,8 +58,8 @@ function StepItem({ step, index }: { step: TaskStep; index: number }) {
 
     return (
         <div className={`flex gap-3 p-2 rounded transition-colors ${isCompleted ? "opacity-60 hover:opacity-80" :
-                isInProgress ? "bg-neutral-800 border-l-2 border-blue-500" :
-                    "opacity-40"
+            isInProgress ? "bg-neutral-800 border-l-2 border-blue-500" :
+                "opacity-40"
             }`}>
             {/* Icon */}
             <div className="mt-0.5 min-w-[20px] text-center">

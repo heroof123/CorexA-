@@ -18,13 +18,13 @@ export async function runBenchmark(
   gpuLayers: number
 ): Promise<BenchmarkResult> {
   console.log('🎯 Benchmark başlatılıyor...');
-  
+
   const testPrompt = "Explain what artificial intelligence is in 3 sentences.";
-  
+
   try {
     // Load model if not loaded
     const { loadGgufModel, chatWithGgufModel } = await import('./ggufProvider');
-    
+
     // Model yükleme süresi
     const loadStart = performance.now();
     await loadGgufModel({
@@ -36,25 +36,25 @@ export async function runBenchmark(
     });
     const loadTime = performance.now() - loadStart;
     console.log(`📦 Model yükleme: ${loadTime.toFixed(0)}ms`);
-    
+
     // İlk token süresi (warm-up)
     const firstTokenStart = performance.now();
-    await chatWithGgufModel(testPrompt, 1, 0.7);
+    await chatWithGgufModel(modelPath, testPrompt, 1, 0.7);
     const firstTokenTime = performance.now() - firstTokenStart;
     console.log(`⚡ İlk token: ${firstTokenTime.toFixed(0)}ms`);
-    
+
     // Gerçek benchmark (512 token)
     const benchStart = performance.now();
-    const response = await chatWithGgufModel(testPrompt, 512, 0.7);
+    const response = await chatWithGgufModel(modelPath, testPrompt, 512, 0.7);
     const benchTime = performance.now() - benchStart;
-    
+
     // Token sayısını tahmin et (yaklaşık 4 karakter = 1 token)
     const completionTokens = Math.round(response.length / 4);
     const promptTokens = Math.round(testPrompt.length / 4);
     const totalTokens = promptTokens + completionTokens;
-    
+
     const tokensPerSecond = (completionTokens / benchTime) * 1000;
-    
+
     const result: BenchmarkResult = {
       modelName: modelPath.split(/[/\\]/).pop() || 'Unknown',
       contextLength,
@@ -66,12 +66,12 @@ export async function runBenchmark(
       completionTokens,
       timestamp: Date.now()
     };
-    
+
     console.log('✅ Benchmark tamamlandı:', result);
-    
+
     // Save to localStorage
     saveBenchmarkResult(result);
-    
+
     return result;
   } catch (error) {
     console.error('❌ Benchmark hatası:', error);
@@ -83,12 +83,12 @@ function saveBenchmarkResult(result: BenchmarkResult) {
   const saved = localStorage.getItem('benchmark-results');
   const results: BenchmarkResult[] = saved ? JSON.parse(saved) : [];
   results.push(result);
-  
+
   // Keep only last 50 results
   if (results.length > 50) {
     results.shift();
   }
-  
+
   localStorage.setItem('benchmark-results', JSON.stringify(results));
 }
 

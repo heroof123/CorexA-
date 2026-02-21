@@ -2,6 +2,7 @@
 // Proje açma, indexleme ve dosya yönetimi sorumluluklarını taşır
 
 import { useState, useCallback } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { open } from "@tauri-apps/plugin-dialog";
 import { createEmbedding } from "../services/embedding";
 import { sendToAI, resetConversation, updateProjectContext } from "../services/ai";
@@ -227,28 +228,82 @@ export function useProjectManager({
     }
   }, [handleProjectSelect, onNotification]);
 
+  const handleCreateNewProject = useCallback(async (projectName: string) => {
+    try {
+      if (!projectName.trim()) {
+        onNotification("warning", "Uyarı", "Lütfen bir proje ismi girin.");
+        return;
+      }
+
+      // 1. Ana klasörü seç
+      const parentDir = await open({ directory: true, multiple: false, title: "Projenin oluşturulacağı ana klasörü seçin" });
+      if (!parentDir || typeof parentDir !== "string") return;
+
+      // 2. Yeni proje klasör yolunu oluştur
+      const newProjectPath = `${parentDir}/${projectName.trim()}`.replace(/\\/g, '/');
+
+      // 3. Klasörü oluştur (Rust tarafında invoke)
+      try {
+        await invoke("create_directory", { path: newProjectPath });
+      } catch (err) {
+        // Eğer klasör zaten varsa devam edebiliriz veya hata verebiliriz
+        console.warn("Klasör zaten mevcut veya oluşturulamadı:", err);
+      }
+
+      // 4. Projeyi aç
+      await handleProjectSelect(newProjectPath);
+
+      // 5. AI'ya projeyi başlatması için komut gönder
+      onMessage({
+        role: "assistant",
+        content: `Harika! **${projectName}** projesini oluşturdum. 🚀\n\nBu projeyi nasıl başlatmamı istersin? Örneğin:\n- "Basit bir React & Tailwind projesi kur"\n- "Python veri analizi yapısı oluştur"\n- "Boş bir README ve temel klasörleri ekle"`,
+        timestamp: Date.now(),
+      });
+
+    } catch (error) {
+      console.error("Proje oluşturma hatası:", error);
+      onNotification("error", "Proje Oluşturulamadı", String(error));
+    }
+  }, [handleProjectSelect, onNotification, onMessage]);
+
   // Dosya indexe ekle (embedding ile)
   const addFileToIndex = useCallback(
     async (filePath: string, content: string) => {
-      try {
-        const embedding = await createEmbedding(content);
-        setFileIndex((prev) => {
-          const existing = prev.find((f) => f.path === filePath);
-          if (existing) {
-            return prev.map((f) =>
-              f.path === filePath ? { ...f, embedding, content: content.substring(0, 10000), lastModified: Date.now() } : f
-            );
-          }
-          return [
-            ...prev,
-            { path: filePath, content: content.substring(0, 10000), embedding, lastModified: Date.now() },
-          ];
-        });
-      } catch (err) {
-        console.error("Embedding hatası:", err);
-      }
+      const normalizedPath = filePath.replace(/\\/g, '/');
+
+      // 1) Anında GUI ağacına (Tree View) ekle (Eğer yoksa)
+      setFiles(prev => {
+        const normalizedPrev = prev.map(p => p.replace(/\\/g, '/'));
+        if (!normalizedPrev.includes(normalizedPath)) {
+          return [...prev, normalizedPath];
+        }
+        return prev;
+      });
+
+      // 2) Index state'ine kaba olarak ekle (embedding henüz boş)
+      setFileIndex((prev) => {
+        const existing = prev.find((f) => f.path.replace(/\\/g, '/') === normalizedPath);
+        if (existing) {
+          return prev.map((f) =>
+            f.path.replace(/\\/g, '/') === normalizedPath ? { ...f, content: content.substring(0, 10000), lastModified: Date.now() } : f
+          );
+        }
+        return [
+          ...prev,
+          { path: normalizedPath, content: content.substring(0, 10000), embedding: [], lastModified: Date.now() },
+        ];
+      });
+
+      // 3) Arka planda Embedding işlemini başlat, GUI'yi bekletme
+      createEmbedding(content).then((embedding) => {
+        setFileIndex((prev) =>
+          prev.map((f) => f.path.replace(/\\/g, '/') === normalizedPath ? { ...f, embedding } : f)
+        );
+      }).catch((err) => {
+        console.error(`❌ Embedding hatası (${filePath}):`, err);
+      });
     },
-    [setFileIndex]
+    [setFileIndex, setFiles]
   );
 
   const saveIndexToDisk = useCallback(
@@ -276,6 +331,7 @@ export function useProjectManager({
     // Actions
     handleProjectSelect,
     handleOpenProject,
+    handleCreateNewProject,
     loadOrIndexProject,
     addFileToIndex,
     saveIndexToDisk,

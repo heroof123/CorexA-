@@ -1,15 +1,15 @@
-import { useState } from 'react';
-import FileManager from './FileManager';
-import ExtensionsManager from './ExtensionsManager';
-import WorkspaceManager from './WorkspaceManager';
-import DatabaseBrowser from './DatabaseBrowser';
-import ApiTesting from './ApiTesting';
-import TaskManager from './TaskManager';
-import DockerIntegration from './DockerIntegration';
-import AccountsPanel from './AccountsPanel';
-import { MCPPanel } from './MCPPanel';
+import { useState } from "react";
+import FileManager from "./FileManager";
+import ExtensionsManager from "./ExtensionsManager";
+import WorkspaceManager from "./WorkspaceManager";
+import DatabaseBrowser from "./DatabaseBrowser";
+import ApiTesting from "./ApiTesting";
+import TaskManager from "./TaskManager";
+import DockerIntegration from "./DockerIntegration";
+import AccountsPanel from "./AccountsPanel";
+import { MCPPanel } from "./MCPPanel";
 
-import { useLanguage } from '../contexts/LanguageContext';
+import { useLanguage } from "../contexts/LanguageContext";
 // import { FileIndex } from '../types/index';
 
 interface SidePanelProps {
@@ -30,6 +30,9 @@ interface SidePanelProps {
 
   // Workspace Manager props
   onWorkspaceSelect?: (path: string) => void;
+  onNewProject?: () => void;
+  onOpenWorkspace?: () => void;
+  onSettingsClick?: () => void;
 }
 
 export default function SidePanel({
@@ -45,10 +48,13 @@ export default function SidePanel({
   onFileDelete,
   onFileRename,
   onRefresh,
-  onWorkspaceSelect
+  onWorkspaceSelect,
+  onNewProject,
+  onOpenWorkspace,
+  onSettingsClick,
 }: SidePanelProps) {
   const { t } = useLanguage();
-  const [searchTerm, setSearchTerm] = useState('');
+  const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [isSearching, setIsSearching] = useState(false);
 
@@ -67,7 +73,7 @@ export default function SidePanel({
         .filter(file => file.toLowerCase().includes(term.toLowerCase()))
         .map(file => ({
           file,
-          matches: [{ line: 1, text: `Found in ${file}` }]
+          matches: [{ line: 1, text: `Found in ${file}` }],
         }));
       setSearchResults(results);
       setIsSearching(false);
@@ -75,28 +81,28 @@ export default function SidePanel({
   };
 
   const renderSearchView = () => (
-    <div className="h-full flex flex-col bg-[var(--color-surface)]">
+    <div className="h-full flex flex-col bg-[var(--color-background)]">
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
-        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('search.title')}</h2>
+        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t("search.title")}</h2>
 
         {/* Search Input */}
         <div className="space-y-1.5">
           <input
             type="text"
-            placeholder={t('search.placeholder')}
+            placeholder={t("search.placeholder")}
             value={searchTerm}
-            onChange={(e) => handleSearch(e.target.value)}
+            onChange={e => handleSearch(e.target.value)}
             className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm focus:outline-none focus:border-[var(--color-primary)]"
           />
           <input
             type="text"
-            placeholder={t('search.includeFiles')}
+            placeholder={t("search.includeFiles")}
             className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm focus:outline-none focus:border-[var(--color-primary)]"
           />
           <input
             type="text"
-            placeholder={t('search.excludeFiles')}
+            placeholder={t("search.excludeFiles")}
             className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm focus:outline-none focus:border-[var(--color-primary)]"
           />
         </div>
@@ -105,15 +111,15 @@ export default function SidePanel({
         <div className="mt-2 space-y-1">
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="rounded" />
-            <span>{t('search.matchCase')}</span>
+            <span>{t("search.matchCase")}</span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="rounded" />
-            <span>{t('search.wholeWord')}</span>
+            <span>{t("search.wholeWord")}</span>
           </label>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" className="rounded" />
-            <span>{t('search.regex')}</span>
+            <span>{t("search.regex")}</span>
           </label>
         </div>
       </div>
@@ -123,7 +129,7 @@ export default function SidePanel({
         {isSearching ? (
           <div className="text-center py-8 text-[var(--color-textSecondary)]">
             <div className="animate-spin text-2xl mb-2">⚙️</div>
-            <p>{t('search.searching')}</p>
+            <p>{t("search.searching")}</p>
           </div>
         ) : searchResults.length > 0 ? (
           <div className="space-y-1.5">
@@ -137,20 +143,19 @@ export default function SidePanel({
                     onClick={() => onFileSelect(result.file)}
                     className="text-sm font-medium text-[var(--color-text)] hover:text-[var(--color-primary)] transition-colors"
                   >
-                    📄 {result.file.split('/').pop()}
+                    📄 {result.file.split("/").pop()}
                   </button>
-                  <div className="text-xs text-[var(--color-textSecondary)]">
-                    {result.file}
-                  </div>
+                  <div className="text-xs text-white/70">{result.file}</div>
                 </div>
                 {result.matches.map((match: any, matchIndex: number) => (
-                  <div key={matchIndex} className="px-2 py-1.5 hover:bg-[var(--color-hover)] cursor-pointer">
+                  <div
+                    key={matchIndex}
+                    className="px-2 py-1.5 hover:bg-[var(--color-hover)] cursor-pointer"
+                  >
                     <div className="text-xs text-[var(--color-textSecondary)]">
                       Line {match.line}
                     </div>
-                    <div className="text-sm font-mono">
-                      {match.text}
-                    </div>
+                    <div className="text-sm font-mono">{match.text}</div>
                   </div>
                 ))}
               </div>
@@ -159,12 +164,12 @@ export default function SidePanel({
         ) : searchTerm ? (
           <div className="text-center py-8 text-[var(--color-textSecondary)]">
             <div className="text-2xl mb-2">🔍</div>
-            <p>{t('search.noResults')}</p>
+            <p>{t("search.noResults")}</p>
           </div>
         ) : (
           <div className="text-center py-8 text-[var(--color-textSecondary)]">
             <div className="text-2xl mb-2">🔍</div>
-            <p>{t('search.searchWorkspace')}</p>
+            <p>{t("search.searchWorkspace")}</p>
           </div>
         )}
       </div>
@@ -172,10 +177,10 @@ export default function SidePanel({
   );
 
   const renderSourceControlView = () => (
-    <div className="h-full flex flex-col bg-[var(--color-surface)]">
+    <div className="h-full flex flex-col bg-[var(--color-background)]">
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
-        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('git.title')}</h2>
+        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t("git.title")}</h2>
 
         {/* Repository Info */}
         <div className="mb-3">
@@ -190,12 +195,12 @@ export default function SidePanel({
         {/* Commit Message */}
         <div className="space-y-1.5">
           <textarea
-            placeholder={t('git.commitMessage')}
+            placeholder={t("git.commitMessage")}
             className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm resize-none focus:outline-none focus:border-[var(--color-primary)]"
             rows={3}
           />
           <button className="w-full px-3 py-2 bg-[var(--color-primary)] text-white rounded text-sm hover:opacity-80 transition-opacity">
-            ✓ {t('git.commit')}
+            ✓ {t("git.commit")}
           </button>
         </div>
       </div>
@@ -205,20 +210,27 @@ export default function SidePanel({
         <div className="px-3 py-2">
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('git.changes')}</h3>
-              <span className="text-xs bg-[var(--color-primary)] text-white px-2 py-0.5 rounded">3</span>
+              <h3 className="text-sm font-semibold text-[var(--color-text)]">{t("git.changes")}</h3>
+              <span className="text-xs bg-[var(--color-primary)] text-white px-2 py-0.5 rounded">
+                3
+              </span>
             </div>
 
             <div className="space-y-0.5">
-              {['src/App.tsx', 'src/components/ActivityBar.tsx', 'package.json'].map(file => (
-                <div key={file} className="flex items-center gap-2 px-2 py-1.5 hover:bg-[var(--color-hover)] rounded cursor-pointer">
+              {["src/App.tsx", "src/components/ActivityBar.tsx", "package.json"].map(file => (
+                <div
+                  key={file}
+                  className="flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer transition-all duration-200 border border-transparent hover:border-[var(--neon-blue)] hover:shadow-[0_0_10px_rgba(0,243,255,0.2)] hover:bg-[var(--color-hover)] group"
+                >
                   <span className="text-orange-500 text-xs">M</span>
-                  <span className="text-sm flex-1">{file.split('/').pop()}</span>
-                  <div className="flex gap-1">
-                    <button className="w-5 h-5 flex items-center justify-center hover:bg-[var(--color-background)] rounded text-xs">
+                  <span className="text-sm flex-1 group-hover:text-white transition-colors">
+                    {file.split("/").pop()}
+                  </span>
+                  <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <button className="w-5 h-5 flex items-center justify-center hover:bg-[var(--color-background)] rounded text-xs text-[var(--neon-blue)]">
                       +
                     </button>
-                    <button className="w-5 h-5 flex items-center justify-center hover:bg-[var(--color-background)] rounded text-xs">
+                    <button className="w-5 h-5 flex items-center justify-center hover:bg-[var(--color-background)] rounded text-xs text-[var(--neon-purple)]">
                       ↶
                     </button>
                   </div>
@@ -229,7 +241,9 @@ export default function SidePanel({
 
           <div className="mb-3">
             <div className="flex items-center justify-between mb-1.5">
-              <h3 className="text-sm font-semibold text-[var(--color-text)]">{t('git.stagedChanges')}</h3>
+              <h3 className="text-sm font-semibold text-[var(--color-text)]">
+                {t("git.stagedChanges")}
+              </h3>
               <span className="text-xs bg-green-600 text-white px-2 py-0.5 rounded">1</span>
             </div>
 
@@ -249,22 +263,24 @@ export default function SidePanel({
   );
 
   const renderRunDebugView = () => (
-    <div className="h-full flex flex-col bg-[var(--color-surface)]">
+    <div className="h-full flex flex-col bg-[var(--color-background)]">
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
-        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('activity.runDebug')}</h2>
+        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">
+          {t("activity.runDebug")}
+        </h2>
 
         {/* Run Button */}
         <button className="w-full px-3 py-2 bg-green-600 text-white rounded text-sm hover:bg-green-700 transition-colors mb-2">
-          ▶️ {t('common.run')}
+          ▶️ {t("common.run")}
         </button>
 
         {/* Configuration */}
         <div>
           <select className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm">
-            <option>{t('debug.launchProgram')}</option>
-            <option>{t('debug.attachProcess')}</option>
-            <option>{t('debug.launchChrome')}</option>
+            <option>{t("debug.launchProgram")}</option>
+            <option>{t("debug.attachProcess")}</option>
+            <option>{t("debug.launchChrome")}</option>
           </select>
         </div>
       </div>
@@ -273,30 +289,34 @@ export default function SidePanel({
       <div className="flex-1 overflow-y-auto px-3 py-2">
         <div className="space-y-3">
           <div>
-            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t('debug.variables')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">
+              {t("debug.variables")}
+            </h3>
             <div className="text-sm text-[var(--color-textSecondary)]">
-              {t('debug.noVariables')}
+              {t("debug.noVariables")}
             </div>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t('debug.watch')}</h3>
-            <div className="text-sm text-[var(--color-textSecondary)]">
-              {t('debug.noWatch')}
-            </div>
+            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">
+              {t("debug.watch")}
+            </h3>
+            <div className="text-sm text-[var(--color-textSecondary)]">{t("debug.noWatch")}</div>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t('debug.callStack')}</h3>
-            <div className="text-sm text-[var(--color-textSecondary)]">
-              {t('debug.notPaused')}
-            </div>
+            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">
+              {t("debug.callStack")}
+            </h3>
+            <div className="text-sm text-[var(--color-textSecondary)]">{t("debug.notPaused")}</div>
           </div>
 
           <div>
-            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">{t('debug.breakpoints')}</h3>
+            <h3 className="text-sm font-semibold text-[var(--color-text)] mb-1">
+              {t("debug.breakpoints")}
+            </h3>
             <div className="text-sm text-[var(--color-textSecondary)]">
-              {t('debug.noBreakpoints')}
+              {t("debug.noBreakpoints")}
             </div>
           </div>
         </div>
@@ -305,15 +325,17 @@ export default function SidePanel({
   );
 
   const renderSettingsView = () => (
-    <div className="h-full flex flex-col bg-[var(--color-surface)]">
+    <div className="h-full flex flex-col bg-[var(--color-background)]">
       {/* Header */}
       <div className="px-3 py-2 border-b border-[var(--color-border)]">
-        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">{t('settings.title')}</h2>
+        <h2 className="text-lg font-semibold text-[var(--color-text)] mb-2">
+          {t("settings.title")}
+        </h2>
 
         {/* Search Settings */}
         <input
           type="text"
-          placeholder={t('settings.searchSettings')}
+          placeholder={t("settings.searchSettings")}
           className="w-full px-3 py-2 bg-[var(--color-background)] border border-[var(--color-border)] rounded text-sm focus:outline-none focus:border-[var(--color-primary)]"
         />
       </div>
@@ -322,21 +344,34 @@ export default function SidePanel({
       <div className="flex-1 overflow-y-auto">
         <div className="px-3 py-2 space-y-2">
           {[
-            { icon: '👤', title: t('settings.user'), description: t('settings.userDesc') },
-            { icon: '📁', title: t('settings.workspace'), description: t('settings.workspaceDesc') },
-            { icon: '🎨', title: t('settings.appearance'), description: t('settings.appearanceDesc') },
-            { icon: '⌨️', title: t('settings.keyboard'), description: t('settings.keyboardDesc') },
-            { icon: '🧩', title: t('extensions.title'), description: t('settings.extensionsDesc') },
-            { icon: '🔧', title: t('settings.features'), description: t('settings.featuresDesc') },
-            { icon: '🌐', title: t('settings.remote'), description: t('settings.remoteDesc') },
-            { icon: '🔒', title: t('settings.security'), description: t('settings.securityDesc') }
+            { icon: "👤", title: t("settings.user"), description: t("settings.userDesc") },
+            {
+              icon: "📁",
+              title: t("settings.workspace"),
+              description: t("settings.workspaceDesc"),
+            },
+            {
+              icon: "🎨",
+              title: t("settings.appearance"),
+              description: t("settings.appearanceDesc"),
+            },
+            { icon: "⌨️", title: t("settings.keyboard"), description: t("settings.keyboardDesc") },
+            { icon: "🧩", title: t("extensions.title"), description: t("settings.extensionsDesc") },
+            { icon: "🔧", title: t("settings.features"), description: t("settings.featuresDesc") },
+            { icon: "🌐", title: t("settings.remote"), description: t("settings.remoteDesc") },
+            { icon: "🔒", title: t("settings.security"), description: t("settings.securityDesc") },
           ].map((category, index) => (
-            <div key={index} className="p-2.5 border border-[var(--color-border)] rounded hover:border-[var(--color-primary)] cursor-pointer transition-colors">
+            <div
+              key={index}
+              className="p-2.5 border border-[var(--color-border)] rounded hover:border-[var(--color-primary)] cursor-pointer transition-colors"
+            >
               <div className="flex items-center gap-3">
                 <span className="text-xl">{category.icon}</span>
                 <div>
                   <h3 className="font-semibold text-[var(--color-text)]">{category.title}</h3>
-                  <p className="text-sm text-[var(--color-textSecondary)]">{category.description}</p>
+                  <p className="text-sm text-[var(--color-textSecondary)]">
+                    {category.description}
+                  </p>
                 </div>
               </div>
             </div>
@@ -348,7 +383,7 @@ export default function SidePanel({
 
   const renderContent = () => {
     switch (activeView) {
-      case 'explorer':
+      case "explorer":
         return (
           <FileManager
             projectPath={projectPath}
@@ -359,40 +394,45 @@ export default function SidePanel({
             onFileDelete={onFileDelete}
             onFileRename={onFileRename}
             onRefresh={onRefresh}
+            onNewProject={onNewProject}
+            onOpenWorkspace={onOpenWorkspace}
           />
         );
-      case 'search':
+      case "search":
         return renderSearchView();
-      case 'source-control':
+      case "source-control":
         return renderSourceControlView();
-      case 'run-debug':
+      case "run-debug":
         return renderRunDebugView();
-      case 'extensions':
+      case "extensions":
         return <ExtensionsManager isVisible={true} />;
-      case 'accounts':
+      case "accounts":
         return <AccountsPanel />;
-      case 'settings':
+      case "settings":
         return renderSettingsView();
-      case 'workspace':
+      case "workspace":
         return (
           <WorkspaceManager
             currentProjectPath={projectPath}
             onWorkspaceSelect={onWorkspaceSelect || (() => { })}
           />
         );
-      case 'database':
+      case "database":
         return <DatabaseBrowser />;
-      case 'api-testing':
+      case "api-testing":
         return <ApiTesting />;
-      case 'tasks':
+      case "tasks":
         return <TaskManager />;
-      case 'docker':
+      case "docker":
         return <DockerIntegration />;
-      case 'mcp':
+      case "mcp":
         return <MCPPanel />;
-      case 'compare':
-        return <div className="p-4 text-xs text-neutral-400">Model karşılaştırma modu aktif. Ana panelden devam edin.</div>;
-
+      case "compare":
+        return (
+          <div className="p-4 text-xs text-neutral-400">
+            Model karşılaştırma modu aktif. Ana panelden devam edin.
+          </div>
+        );
 
       default:
         return null;
@@ -403,18 +443,29 @@ export default function SidePanel({
 
   return (
     <div
-      className="h-full bg-[var(--color-surface)] border-r border-[var(--color-border)] flex"
+      className="h-full flex transition-all duration-300 ease-in-out relative z-20 glass-panel border-r-0"
       style={{ width: `${width}px` }}
     >
       {/* Content */}
-      <div className="flex-1 overflow-hidden">
-        {renderContent()}
-      </div>
+      <div className="flex-1 overflow-hidden">{renderContent()}</div>
+
+      {/* Settings Button */}
+      {onSettingsClick && (
+        <div className="absolute bottom-0 left-0 right-0 p-2 border-t border-[var(--color-border)] bg-[var(--color-surface)]">
+          <button
+            onClick={onSettingsClick}
+            className="w-full flex items-center gap-2 px-3 py-2 rounded-lg hover:bg-[var(--color-hover)] transition-colors text-white/70 hover:text-white"
+          >
+            <span>⚙️</span>
+            <span className="text-xs font-medium">Ayarlar</span>
+          </button>
+        </div>
+      )}
 
       {/* Resize Handle */}
       <div
         className="w-1 bg-transparent hover:bg-[var(--color-primary)] cursor-ew-resize transition-colors flex-shrink-0"
-        onMouseDown={(e) => {
+        onMouseDown={e => {
           e.preventDefault();
           const startX = e.clientX;
           const startWidth = width;
@@ -426,12 +477,12 @@ export default function SidePanel({
           };
 
           const handleMouseUp = () => {
-            document.removeEventListener('mousemove', handleMouseMove);
-            document.removeEventListener('mouseup', handleMouseUp);
+            document.removeEventListener("mousemove", handleMouseMove);
+            document.removeEventListener("mouseup", handleMouseUp);
           };
 
-          document.addEventListener('mousemove', handleMouseMove);
-          document.addEventListener('mouseup', handleMouseUp);
+          document.addEventListener("mousemove", handleMouseMove);
+          document.addEventListener("mouseup", handleMouseUp);
         }}
       />
     </div>

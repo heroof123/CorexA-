@@ -12,66 +12,74 @@ export default function Dashboard() {
   ];
 
   return (
-    <div className="w-full h-full flex items-center justify-center bg-[#1e1e1e] relative overflow-hidden">
+    <div className="w-full h-full flex items-center justify-center bg-transparent relative overflow-hidden">
       {/* Infinite Background */}
-      <div className="absolute inset-0 bg-gradient-to-br from-[#1a1a1a] via-[#1e1e1e] to-[#222222]">
+      <div className="absolute inset-0 bg-[var(--color-background)]">
         {/* Animated Grid Pattern */}
-        <div 
-          className="absolute inset-0 opacity-10 animate-pulse"
+        <div
+          className="absolute inset-0 opacity-[0.03]"
           style={{
             backgroundImage: `
-              linear-gradient(rgba(59,130,246,0.3) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(59,130,246,0.3) 1px, transparent 1px)
+              linear-gradient(var(--neon-blue) 1px, transparent 1px),
+              linear-gradient(90deg, var(--neon-blue) 1px, transparent 1px)
             `,
-            backgroundSize: '100px 100px',
-            animation: 'gridMove 20s linear infinite'
+            backgroundSize: "80px 80px",
+            animation: "gridMove 40s linear infinite",
           }}
         />
-        
+
         {/* Floating Particles */}
-        <div className="absolute inset-0">
-          {[...Array(20)].map((_, i) => (
+        <div className="absolute inset-0 overflow-hidden">
+          {[...Array(30)].map((_, i) => (
             <div
               key={i}
-              className="absolute w-1 h-1 bg-blue-400 rounded-full opacity-30"
+              className="absolute w-[2px] h-[2px] bg-[var(--neon-blue)] rounded-full opacity-20 shadow-[0_0_8px_var(--neon-blue)]"
               style={{
                 left: `${Math.random() * 100}%`,
                 top: `${Math.random() * 100}%`,
-                animation: `float ${5 + Math.random() * 10}s ease-in-out infinite`,
-                animationDelay: `${Math.random() * 5}s`
+                animation: `float ${10 + Math.random() * 20}s ease-in-out infinite`,
+                animationDelay: `${Math.random() * -10}s`,
               }}
             />
           ))}
         </div>
-        
-        {/* Radial Gradient Overlay */}
-        <div className="absolute inset-0 bg-gradient-radial from-transparent via-transparent to-black/30" />
+
+        {/* Glowing Orbs */}
+        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[var(--neon-blue)] opacity-5 blur-[120px] rounded-full animate-pulse" />
+        <div
+          className="absolute bottom-1/4 right-1/4 w-96 h-96 bg-[var(--neon-purple)] opacity-5 blur-[120px] rounded-full animate-pulse"
+          style={{ animationDelay: "2s" }}
+        />
       </div>
-      
-      <div className="flex flex-col items-center relative z-10">
+
+      <div className="flex flex-col items-center relative z-10 animate-fade-in">
         {/* Corex Logo */}
-        <div className="mb-8">
-          <CorexLogo size={96} className="drop-shadow-2xl" />
+        <div className="mb-12 relative group">
+          <div className="absolute inset-0 bg-blue-500/20 blur-3xl rounded-full scale-150 group-hover:bg-blue-500/30 transition-all duration-700" />
+          <CorexLogo
+            size={120}
+            className="drop-shadow-[0_0_30px_rgba(59,130,246,0.5)] relative transition-transform duration-500 group-hover:scale-105"
+          />
         </div>
 
         {/* Shortcuts List */}
-        <div className="space-y-2 w-full max-w-md">
+        <div className="grid grid-cols-2 gap-3 w-full max-w-2xl px-6">
           {shortcuts.map((shortcut, index) => (
             <div
               key={index}
-              className="flex items-center justify-between px-4 py-2 rounded-lg bg-[#252525]/50 hover:bg-[#2a2a2a] transition-colors group backdrop-blur-sm border border-neutral-800/50"
+              className="flex items-center justify-between px-5 py-3 rounded-xl glass-card hover:border-[var(--neon-blue)] hover:neon-glow-blue transition-all duration-300 group cursor-default"
             >
-              <span className="text-sm text-neutral-400 group-hover:text-neutral-300 transition-colors">
+              <span className="text-xs font-bold uppercase tracking-widest text-[var(--color-textSecondary)] group-hover:text-[var(--color-text)] transition-colors">
                 {shortcut.label}
               </span>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5">
                 {shortcut.keys.map((key, keyIndex) => (
-                  <span key={keyIndex}>
-                    <kbd className="px-2 py-1 text-xs font-semibold text-neutral-400 bg-[#181818] border border-neutral-700 rounded shadow-sm">
+                  <span key={keyIndex} className="flex items-center gap-1">
+                    <kbd className="px-2 py-1 text-[10px] font-black text-[var(--color-text)] bg-[var(--color-surface)] border border-[var(--color-border)] rounded-md shadow-inner group-hover:border-[var(--color-primary)] transition-all">
                       {key}
                     </kbd>
                     {keyIndex < shortcut.keys.length - 1 && (
-                      <span className="mx-1 text-neutral-600">+</span>
+                      <span className="text-[var(--color-textSecondary)] font-light">+</span>
                     )}
                   </span>
                 ))}
@@ -80,7 +88,7 @@ export default function Dashboard() {
           ))}
         </div>
       </div>
-      
+
       {/* CSS Animations */}
       <style>{`
         @keyframes gridMove {

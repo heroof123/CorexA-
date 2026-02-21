@@ -1,9 +1,9 @@
-// services/incrementalIndexer.ts - Sadece değişen dosyaları indexle
-
 import { invoke } from "@tauri-apps/api/core";
-import { createEmbedding, shouldIndexFile } from "./embedding";
+import { createEmbedding, shouldIndexFile, getEmbeddingEndpoint } from "./embedding";
 import { cacheManager, generateFileCacheKey } from "./cache";
 import { FileIndex } from "../types/index";
+import { gitIntelligence } from "./gitIntelligence";
+import { ragService } from "./ragService";
 
 interface IndexingResult {
   indexed: FileIndex[];
@@ -16,7 +16,7 @@ interface IndexingResult {
 
 export class IncrementalIndexer {
   private previousIndex: Map<string, FileIndex> = new Map();
-  
+
   /**
    * Incremental indexing - sadece değişen dosyaları indexle
    */
@@ -27,44 +27,44 @@ export class IncrementalIndexer {
   ): Promise<IndexingResult> {
     const startTime = Date.now();
     console.log("🚀 Incremental indexing başlatılıyor...");
-    
+
     // Mevcut index'i Map'e çevir (hızlı lookup için)
     this.previousIndex.clear();
     existingIndex.forEach(file => {
       this.previousIndex.set(file.path, file);
     });
-    
+
     // Tüm dosyaları tara
     const allFiles = await invoke<string[]>("scan_project", { path: projectPath });
     const filteredFiles = allFiles.filter(shouldIndexFile);
-    
+
     console.log(`📁 ${filteredFiles.length} dosya bulundu (${allFiles.length - filteredFiles.length} filtrelendi)`);
-    
+
     const newIndex: FileIndex[] = [];
     const currentFilePaths = new Set(filteredFiles);
-    
+
     let skipped = 0;
     let updated = 0;
     let added = 0;
-    
+
     // Her dosyayı kontrol et
     for (let i = 0; i < filteredFiles.length; i++) {
       const filePath = filteredFiles[i];
-      
+
       if (onProgress) {
         onProgress(i + 1, filteredFiles.length, filePath);
       }
-      
+
       try {
         // Dosya içeriğini oku
         const content = await invoke<string>("read_file", { path: filePath });
-        
+
         // Dosya metadata'sını al
         const metadata = await this.getFileMetadata(filePath);
-        
+
         // Önceki index'te var mı?
         const previousFile = this.previousIndex.get(filePath);
-        
+
         // Değişiklik kontrolü
         if (previousFile && !cacheManager.hasFileChanged(filePath, metadata.lastModified)) {
           // Dosya değişmemiş, cache'den al
@@ -73,11 +73,11 @@ export class IncrementalIndexer {
           skipped++;
           continue;
         }
-        
+
         // Cache'de embedding var mı?
         const cacheKey = generateFileCacheKey(filePath, content);
         let embedding = cacheManager.getEmbedding(cacheKey);
-        
+
         if (!embedding) {
           // Yeni embedding oluştur
           console.log(`🔄 Indexleniyor: ${filePath}`);
@@ -86,7 +86,7 @@ export class IncrementalIndexer {
         } else {
           console.log(`💾 Cache'den alındı: ${filePath}`);
         }
-        
+
         // Metadata'yı cache'le
         cacheManager.setFileMetadata({
           path: filePath,
@@ -94,30 +94,33 @@ export class IncrementalIndexer {
           size: metadata.size,
           hash: cacheKey
         });
-        
+
         newIndex.push({
           path: filePath,
           content: content.substring(0, 10000), // İlk 10KB
           embedding,
           lastModified: metadata.lastModified
         });
-        
+
         if (previousFile) {
           updated++;
         } else {
           added++;
         }
-        
+
       } catch (error) {
         console.error(`❌ Dosya indexleme hatası (${filePath}):`, error);
       }
     }
-    
+
     // Silinen dosyaları tespit et
     const removed = existingIndex.filter(file => !currentFilePaths.has(file.path)).length;
-    
+
+    // 🆕 Git geçmişini senkronize et (Arka planda)
+    this.syncGitHistory().catch(err => console.error("⚠️ Git sync error:", err));
+
     const duration = Date.now() - startTime;
-    
+
     console.log(`✅ Indexing tamamlandı:
       - Toplam: ${newIndex.length} dosya
       - Eklenen: ${added}
@@ -126,7 +129,7 @@ export class IncrementalIndexer {
       - Silinen: ${removed}
       - Süre: ${(duration / 1000).toFixed(2)}s
     `);
-    
+
     return {
       indexed: newIndex,
       skipped,
@@ -136,7 +139,7 @@ export class IncrementalIndexer {
       duration
     };
   }
-  
+
   /**
    * Tek bir dosyayı indexle (hızlı güncelleme için)
    */
@@ -146,49 +149,50 @@ export class IncrementalIndexer {
         console.log(`⏭️ Dosya filtrelendi: ${filePath}`);
         return null;
       }
-      
+
       const content = await invoke<string>("read_file", { path: filePath });
       const metadata = await this.getFileMetadata(filePath);
-      
+
       // Cache kontrolü
       const cacheKey = generateFileCacheKey(filePath, content);
       let embedding = cacheManager.getEmbedding(cacheKey);
-      
+
       if (!embedding) {
         console.log(`🔄 Tek dosya indexleniyor: ${filePath}`);
         embedding = await createEmbedding(content);
         cacheManager.setEmbedding(cacheKey, embedding);
       }
-      
+
       cacheManager.setFileMetadata({
         path: filePath,
         lastModified: metadata.lastModified,
         size: metadata.size,
         hash: cacheKey
       });
-      
+
       // 🆕 Vector DB'ye indexle
       try {
-        await invoke("index_file_vector", { filePath });
+        const endpoint = getEmbeddingEndpoint();
+        await invoke("index_file_vector", { filePath, endpoint });
         console.log(`✅ Vector DB'ye eklendi: ${filePath}`);
       } catch (error) {
         console.warn(`⚠️ Vector DB indexleme hatası (${filePath}):`, error);
         // Vector DB hatası indexlemeyi durdurmasın
       }
-      
+
       return {
         path: filePath,
         content: content.substring(0, 10000),
         embedding,
         lastModified: metadata.lastModified
       };
-      
+
     } catch (error) {
       console.error(`❌ Tek dosya indexleme hatası (${filePath}):`, error);
       return null;
     }
   }
-  
+
   /**
    * Dosya metadata'sını al
    */
@@ -207,23 +211,41 @@ export class IncrementalIndexer {
       };
     }
   }
-  
+
   /**
    * Batch indexing - birden fazla dosyayı paralel indexle
    */
   async indexBatch(filePaths: string[], batchSize: number = 5): Promise<FileIndex[]> {
     const results: FileIndex[] = [];
-    
+
     for (let i = 0; i < filePaths.length; i += batchSize) {
       const batch = filePaths.slice(i, i + batchSize);
       const batchResults = await Promise.all(
         batch.map(path => this.indexSingleFile(path))
       );
-      
+
       results.push(...batchResults.filter(r => r !== null) as FileIndex[]);
     }
-    
+
     return results;
+  }
+
+  /**
+   * 🆕 Git geçmişini vektör veritabanına aktar
+   */
+  async syncGitHistory(limit: number = 100): Promise<void> {
+    console.log("📜 Git geçmişi senkronize ediliyor...");
+    try {
+      const history = await gitIntelligence.getProjectHistory(limit);
+
+      for (const commit of history) {
+        await ragService.indexCommit(commit);
+      }
+
+      console.log(`✅ ${history.length} commit başarıyla tarandı ve hafızaya eklendi.`);
+    } catch (error) {
+      console.warn("⚠️ Git geçmişi senkronize edilemedi:", error);
+    }
   }
 }
 

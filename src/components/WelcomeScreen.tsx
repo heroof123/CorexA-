@@ -772,7 +772,7 @@ CEVAP:`;
             bottom: '40%',
             animation: 'float5 25s infinite linear'
           }} />
-        <div className="absolute w-1.5 h-1.5 bg-yellow-400 rounded-full opacity-55"
+        <div className="absolute w-1.5 h-1.5 bg-slate-400 rounded-full opacity-55"
           style={{
             left: '5%',
             top: '60%',
@@ -1025,10 +1025,10 @@ CEVAP:`;
                     >
                       <div
                         className={`max-w-[80%] rounded-lg px-3 py-2 ${msg.role === "user"
-                            ? "bg-green-600 text-white"
-                            : msg.role === "system"
-                              ? "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20"
-                              : "bg-[#252525] text-neutral-100 border border-neutral-800"
+                          ? "bg-green-600 text-white"
+                          : msg.role === "system"
+                            ? "bg-yellow-500/10 text-yellow-300 border border-yellow-500/20"
+                            : "bg-[#252525] text-neutral-100 border border-neutral-800"
                           }`}
                       >
                         <pre className="text-sm whitespace-pre-wrap font-sans">
@@ -1158,8 +1158,8 @@ CEVAP:`;
                       key={template.id}
                       onClick={() => setProjectTemplate(template.id)}
                       className={`p-4 rounded-lg border-2 transition-all text-left ${projectTemplate === template.id
-                          ? 'border-purple-500 bg-purple-500/10'
-                          : 'border-neutral-700 bg-[#252525] hover:border-neutral-600'
+                        ? 'border-purple-500 bg-purple-500/10'
+                        : 'border-neutral-700 bg-[#252525] hover:border-neutral-600'
                         }`}
                     >
                       <div className="flex items-center gap-3 mb-2">

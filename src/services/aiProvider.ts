@@ -181,8 +181,16 @@ export async function callAI(
   conversationHistory?: Array<{ role: string; content: string }>,
   onStreamToken?: (text: string) => void // 🆕 Streaming callback
 ): Promise<string> {
+  const isTurkish = navigator.language ? navigator.language.startsWith('tr') : true;
+  const agenticInstruction = isTurkish
+    ? '\n\n[SİSTEM ÖNEMLİ KURALI: Eğer sana sadece selam veriliyorsa veya kodla ilgisiz bir sohbet ediliyorsa, doğal bir dille sadece sohbet et, asla kod bloğu üretme! ANCAK eğer bir kod yazman veya değiştirmen isteniyorsa:\n1. **DÜŞÜNME AŞAMASI (THINKING STAGE):** Kod yazmadan önce sana sunulan "Project Map", "Project Rules" ve "User Focus" (Cursor/Selection) verilerini analiz et. Stratejini 1-2 cümleyle açıkla.\n2. **KOD İNCELEME MODU (REVIEW MODE):** Eğer kullanıcı bir "Ghost Review" veya refactor önerisiyle gelmişse, koda bir kıdemli yazılımcı (senior dev) gözüyle bak. Sadece hatayı değil, temiz kod (clean code) prensiplerini ve performansı da gözet.\n3. **HATA DÜZELTME MODU (FIXING MODE):** Eğer kullanıcı bir terminal hatası (Terminal context) paylaşmışsa, önceliğin bu hatayı çözmek olsun. Hatayı analiz et ve doğrudan çözüme odaklanan <<<SEARCH === >>>REPLACE güncellemeleri yap.\n4. **PROJE KURALLARI:** Eğer bir ".corexrules" veya "COREX.md" dosyası sunulmuşsa, oradaki teknik kurallara KESİNLİKLE uy.\n5. **TAM FONKSİYONEL KOD:** Ürettiğin kodlar her zaman İNTERAKTİF olmalı.\n6. **UI/UX:** Modern ve premium UI/UX prensiplerini uygula.\n7. **DOSYA GÜNCELLEME:** Sadece değiştirmek istediğin yeri <<<SEARCH === >>>REPLACE formatında ver. Sadece zorunluysa tüm dosyayı yaz.\n8. **YENİ DOSYA:** Normal ```html:index.html formatında dosya adını belirterek kod bloğunu kullan. ASLA açıklamalar yazma. YALNIZCA KOD BLOKÜ ÜRET.]'
+    : '\n\n[SYSTEM CRITICAL RULE: If the user is just chatting or saying hello, respond normally in natural language. BUT if you are generating or modifying code:\n1. **THINKING STAGE:** Before writing any code, analyze the "Project Map", "Project Rules", and "User Focus" (Cursor/Selection) provided. Explain your strategy in 1-2 sentences.\n2. **REVIEW MODE:** If a "Ghost Review" or refactor suggestion is provided, analyze the code as a senior developer. Focus on clean code principles, performance, and maintainability.\n3. **FIXING MODE:** If terminal error context is provided, prioritize fixing this specific error. Analyze the error and provide direct <<<SEARCH === >>>REPLACE updates to resolve it.\n4. **PROJECT RULES:** If a ".corexrules" or "COREX.md" file is provided, STRICTLY follow the technical rules and naming standards defined there.\n5. **FULLY FUNCTIONAL CODE:** Generated code must be INTERACTIVE.\n6. **UI/UX:** Apply modern and premium UI/UX principles.\n7. **FILE UPDATE:** Provide ONLY the exact part to change using <<<SEARCH === >>>REPLACE format. Only rewrite the full file if absolutely necessary.\n8. **NEW FILE:** Always provide the filename in the code block like ```html:index.html. NEVER write explanations. ONLY OUTPUT THE CODE BLOCK.]';
+
+  const enhancedMessage = message + agenticInstruction;
+
   // 🆕 Mesajdan resimleri parse et
-  const { cleanMessage, images } = parseImagesFromMessage(message);
+  const { cleanMessage, images } = parseImagesFromMessage(enhancedMessage);
+
 
   if (images.length > 0) {
     console.log('📷 Vision mode aktif:', images.length, 'resim bulundu');
@@ -387,7 +395,7 @@ export async function callAI(
       }
 
       // Current message
-      conversationText += `[INST] ${message} [/INST]`;
+      conversationText += `[INST] ${cleanMessage} [/INST]`;
 
       fullPrompt = conversationText;
 
@@ -512,7 +520,7 @@ export async function callAI(
   const adjustedMaxTokens = model.maxTokens ? Math.max(model.maxTokens, 8192) : 8192;
 
   const aiPromise = invoke<string>("chat_with_dynamic_ai", {
-    message,
+    message: cleanMessage,
     conversationHistory: conversationHistory || [],
     providerConfig: {
       base_url: provider.baseUrl,

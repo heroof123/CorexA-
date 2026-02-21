@@ -3,11 +3,13 @@
 
 import { useState, useRef, useCallback, useEffect } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { resetConversation, getConversationContext, getModelIdForRole } from "../services/ai"; // 🆕 getModelIdForRole eklendi
+import { resetConversation, getConversationContext, getModelIdForRole } from "../services/ai";
 import { saveConversation, getConversation } from "../services/db";
-import { Message, CodeAction } from "../types/index";
+import { Message, CodeAction, FileIndex } from "../types/index";
 import { CoreMessage } from "../core/protocol";
-import { callAI } from "../services/aiProvider"; // 🆕 callAI eklendi
+import { callAI } from "../services/aiProvider";
+import { smartContextBuilder } from "../services/smartContextBuilder";
+import { createEmbedding } from "../services/embedding";
 
 // Uzantı → dil eşleştirme tablosu
 const EXTENSION_MAP: Record<string, string> = {
@@ -25,15 +27,61 @@ function generateMessageId(prefix = "msg"): string {
 
 function extractCodeBlocks(text: string): Array<{ language: string; code: string; filename?: string }> {
     const codeBlocks: Array<{ language: string; code: string; filename?: string }> = [];
-    const codeBlockRegex = /```(\w+)(?:\s+(.+?))?\n([\s\S]*?)```/g;
-    let match;
-    while ((match = codeBlockRegex.exec(text)) !== null) {
-        const language = match[1] || "txt";
-        const filename = match[2]?.trim();
-        const code = match[3].trim();
-        if (code.length === 0) continue;
-        codeBlocks.push({ language, code, filename });
+
+    // Split text by lines, handling both \r\n and \n
+    const lines = text.split(/\r?\n/);
+
+    let isInsideBlock = false;
+    let currentLanguage = "";
+    let currentFilename: string | undefined = undefined;
+    let currentCode: string[] = [];
+
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        if (line.trim().startsWith('```')) {
+            if (!isInsideBlock) {
+                // Starting a new block
+                isInsideBlock = true;
+                currentCode = [];
+
+                // Parse the language line
+                const langLine = line.trim().substring(3).trim();
+                let language = "txt";
+                let filename: string | undefined = undefined;
+
+                if (langLine) {
+                    if (langLine.includes(":")) {
+                        const parts = langLine.split(":");
+                        language = parts[0].trim();
+                        filename = parts.slice(1).join(":").trim();
+                    } else if (langLine.includes(" ")) {
+                        const parts = langLine.split(" ");
+                        language = parts[0].trim();
+                        filename = parts.slice(1).join(" ").trim();
+                    } else {
+                        language = langLine;
+                    }
+                }
+
+                currentLanguage = language;
+                currentFilename = filename;
+            } else {
+                // Ending the current block
+                isInsideBlock = false;
+                if (currentCode.length > 0) {
+                    codeBlocks.push({
+                        language: currentLanguage,
+                        code: currentCode.join('\n').trim(),
+                        filename: currentFilename
+                    });
+                }
+            }
+        } else if (isInsideBlock) {
+            currentCode.push(line);
+        }
     }
+
     return codeBlocks;
 }
 
@@ -44,7 +92,11 @@ interface UseChatMessagesOptions {
     stopCoreGeneration: () => void;
     openFile: (path: string) => Promise<void>;
     addFileToIndex: (path: string, content: string) => Promise<void>;
-    currentFile?: string; // 🆕 Aktif dosya yolu
+    currentFile?: string;
+    fileIndex: FileIndex[];
+    cursorLine?: number;
+    cursorColumn?: number;
+    selection?: string;
 }
 
 export function useChatMessages({
@@ -54,7 +106,11 @@ export function useChatMessages({
     stopCoreGeneration,
     openFile,
     addFileToIndex,
-    currentFile, // 🆕
+    currentFile,
+    fileIndex,
+    cursorLine,
+    cursorColumn,
+    selection,
 }: UseChatMessagesOptions) {
     const [messages, setMessages] = useState<Message[]>([]);
     const [isLoading, setIsLoading] = useState(false);
@@ -64,6 +120,131 @@ export function useChatMessages({
         parameters: Record<string, unknown>;
         resolve: (approved: boolean) => void;
     } | null>(null);
+
+    // 🆕 Ortak cevap işleme fonksiyonu (hem streaming hem sendMessage için)
+    const processFinalResponse = useCallback(async (fullResponse: string, messageId: string) => {
+        const codeBlocks = extractCodeBlocks(fullResponse);
+        const assistantMsgId = messageId.startsWith('assistant-') ? messageId : `assistant-${messageId}`;
+
+        if (codeBlocks.length > 0) {
+            let cleanResponse = fullResponse;
+            const newActions: CodeAction[] = [];
+
+            codeBlocks.forEach((block) => {
+                let filename = block.filename;
+                let isModification = false;
+
+                if (!filename && currentFile) {
+                    filename = currentFile.split(/[\\\/]/).pop();
+                    isModification = true;
+                }
+
+                if (!filename) {
+                    const ext = EXTENSION_MAP[block.language.toLowerCase()] || "txt";
+                    filename = `generated_${Date.now()}.${ext}`;
+                }
+
+                let filepath = (isModification && currentFile) ? currentFile : (projectPath ? `${projectPath}/${filename}` : filename);
+
+                // Ensure project path is included if it's a relative path
+                if (projectPath && !filepath.includes(projectPath) && !filepath.includes(":") && !filepath.startsWith("/")) {
+                    filepath = `${projectPath}/${filename}`;
+                }
+
+                let isPatch = false;
+                let searchContent = "";
+                let replaceContent = "";
+
+                if (block.code.includes("<<<SEARCH") && block.code.includes(">>>REPLACE")) {
+                    const searchMatch = block.code.match(/<<<SEARCH\n([\s\S]*?)\n===/);
+                    const replaceMatch = block.code.match(/===\n([\s\S]*?)\n>>>REPLACE/);
+
+                    if (searchMatch && replaceMatch) {
+                        isPatch = true;
+                        searchContent = searchMatch[1];
+                        replaceContent = replaceMatch[1];
+                    }
+                }
+
+                const replacement = `\n📄 **${isPatch ? 'Kısmi yama uygulanıyor' : (isModification ? 'Dosya güncelleniyor' : 'Yeni dosya oluşturuluyor')}:** \`${filename}\` (${block.language}) 🚀\n`;
+                cleanResponse = cleanResponse.replace(/```[\s\S]*?```/, replacement);
+
+                const actionOpts: CodeAction = {
+                    id: `action-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+                    type: isPatch ? 'patch' : (isModification ? 'modify' : 'create'),
+                    filePath: filepath,
+                    content: block.code,
+                    description: isPatch ? `${filename} kısmi güncellendi` : (isModification ? `${filename} güncellendi` : `${filename} oluşturuldu`)
+                };
+
+                if (isPatch) {
+                    actionOpts.patchData = { search: searchContent, replace: replaceContent };
+                }
+
+                newActions.push(actionOpts);
+            });
+
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === assistantMsgId ? { ...msg, content: cleanResponse.trim() } : msg
+                )
+            );
+
+            // AUTO-APPLY
+            for (const action of newActions) {
+                try {
+                    const filename = action.filePath.split(/[\\\/]/).pop() || '';
+
+                    if (action.type === 'patch' && action.patchData) {
+                        const originalContent = await invoke<string>("read_file_content", { path: action.filePath });
+
+                        if (originalContent.includes(action.patchData.search)) {
+                            const newFileContent = originalContent.replace(action.patchData.search, action.patchData.replace);
+                            await invoke("write_file", { path: action.filePath, content: newFileContent });
+                            await openFile(action.filePath);
+                            await addFileToIndex(action.filePath, newFileContent);
+
+                            setMessages(prev => [...prev, {
+                                id: `auto-apply-success-${Date.now()}-${Math.random()}`,
+                                role: "system",
+                                content: `✅ **${filename}** dosyasına kısmi yama (patch) uygulandı ve ana ekranda açıldı!`,
+                                timestamp: Date.now()
+                            }]);
+                        } else {
+                            throw new Error(`Arama metni dosyada tam olarak bulunamadı.`);
+                        }
+                    } else {
+                        await invoke("write_file", { path: action.filePath, content: action.content });
+                        await openFile(action.filePath);
+                        await addFileToIndex(action.filePath, action.content);
+
+                        setMessages(prev => [...prev, {
+                            id: `auto-apply-success-${Date.now()}-${Math.random()}`,
+                            role: "system",
+                            content: action.type === 'modify'
+                                ? `✅ **${filename}** dosyası tamamen güncellendi ve ana ekranda açıldı!`
+                                : `✅ **${filename}** oluşturuldu ve ana ekranda açıldı!`,
+                            timestamp: Date.now()
+                        }]);
+                    }
+                } catch (error) {
+                    setMessages(prev => [...prev, {
+                        id: `auto-apply-error-${Date.now()}-${Math.random()}`,
+                        role: "system",
+                        content: `❌ **Oto-Uygulama Hatası (${action.filePath}):** ${error}`,
+                        timestamp: Date.now()
+                    }]);
+                }
+            }
+        } else {
+            // No code blocks, just set the full content
+            setMessages((prev) =>
+                prev.map((msg) =>
+                    msg.id === assistantMsgId ? { ...msg, content: fullResponse } : msg
+                )
+            );
+        }
+    }, [currentFile, projectPath, openFile, addFileToIndex]);
 
     // Streaming throttle refs
     const processedMessagesRef = useRef<Set<string>>(new Set());
@@ -124,31 +305,15 @@ export function useChatMessages({
                 break;
             }
             case "streaming/complete": {
+                if (tokenUpdateTimeoutRef.current) {
+                    clearTimeout(tokenUpdateTimeoutRef.current);
+                    pendingTokenUpdateRef.current = null;
+                }
+
                 const fullResponse = ("data" in latestMessage) ? (latestMessage.data as any).fullResponse : "";
                 const requestId = ("data" in latestMessage) ? (latestMessage.data as any).requestId : "";
-                const codeBlocks = extractCodeBlocks(fullResponse);
 
-                if (codeBlocks.length > 0) {
-                    let cleanResponse = fullResponse;
-                    codeBlocks.forEach((block, index) => {
-                        const filename = block.filename || `file-${index + 1}.${block.language}`;
-                        const replacement = `\n📄 **Dosya oluşturuldu:** \`${filename}\` (${block.language})\n`;
-                        cleanResponse = cleanResponse.replace(/```[\s\S]*?```/, replacement);
-                    });
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.id === `assistant-${requestId}` ? { ...msg, content: cleanResponse.trim() } : msg
-                        )
-                    );
-                    createFilesFromCodeBlocks(codeBlocks, projectPath, openFile, addFileToIndex, setMessages, currentFile);
-                } else {
-                    setMessages((prev) =>
-                        prev.map((msg) =>
-                            msg.id === `assistant-${requestId}` ? { ...msg, content: fullResponse } : msg
-                        )
-                    );
-                }
-                setIsLoading(false);
+                processFinalResponse(fullResponse, requestId);
                 break;
             }
             case "streaming/error":
@@ -173,47 +338,102 @@ export function useChatMessages({
     }, []);
 
     const sendMessage = useCallback(
-        async (userMessage: string, context?: string) => {
+        async (userMessage: string) => {
             if (!userMessage.trim() || isLoading) return;
 
-            // UI'da sadece kullanıcının yazdığı mesajı göster
-            const userMsg = { id: generateMessageId("user"), role: "user" as const, content: userMessage, timestamp: Date.now() };
+            // 1. UI update (Optimistic)
+            const userMsg: Message = {
+                id: generateMessageId("user"),
+                role: "user",
+                content: userMessage,
+                timestamp: Date.now()
+            };
             setMessages((prev) => [...prev, userMsg]);
             setIsLoading(true);
 
+            // 2. Semantic Context Retrieval (Hybrid)
+            let contextText = "";
+            let projectMapText = "";
+            let focusText = "";
+
             try {
-                // Aktif modeli bul
-                const modelId = getModelIdForRole();
-
-                // Geçmişi hazırla (Context burada geçmişe dahil edilmiyor, sadece son mesaja ekleniyor)
-                const history = messages.map(m => ({ role: m.role, content: m.content }));
-
-                // AI'ya gönderilecek mesaj (Context varsa ekle)
-                // Not: Context'i history'ye eklemiyoruz, çünkü bir sonraki turda history'de 
-                // devasa dosya içeriği olmasını istemeyiz. Sadece o anki prompt için geçerli olsun.
-                const fullPrompt = context ? `${userMessage}\n${context}` : userMessage;
-
-                // Mesaj placeholder
-                const msgId = generateMessageId("assistant");
-                setMessages(prev => [...prev, { id: msgId, role: "assistant", content: "", timestamp: Date.now() }]);
-
-                // AI çağrısı (Streaming)
-                await callAI(
-                    fullPrompt, // AI burayı tam metin olarak görür
-                    modelId,
-                    history,
-                    (token) => {
-                        setMessages(prev => prev.map(m => m.id === msgId ? { ...m, content: m.content + token } : m));
-                    }
+                // 1. AI Knowledge Base (Project Rules)
+                let projectRules = "";
+                const rulesFile = fileIndex.find(f =>
+                    f.path.toLowerCase().endsWith('.corexrules') ||
+                    f.path.toLowerCase().endsWith('corex.md')
                 );
+                if (rulesFile) {
+                    projectRules = `\n--- PERMANENT PROJECT RULES (.corexrules) ---\n${rulesFile.content}\n-------------------------------------------\n`;
+                }
+
+                // 2. Global Project Map
+                const context = getConversationContext();
+                projectMapText = `\n--- GLOBAL PROJECT MAP ---\nProject: ${context.projectContext.name || 'Corex Project'}\nType: ${context.projectContext.type}\nLanguages: ${context.projectContext.mainLanguages.join(", ")}\nRoot: ${projectPath}\n${projectRules}-------------------------\n`;
+
+                // 3. Current Focus (Cursor & Selection)
+                if (currentFile) {
+                    focusText = `\n--- USER FOCUS ---\nActive File: ${currentFile}\n`;
+                    if (cursorLine !== undefined) {
+                        focusText += `Cursor Position: Line ${cursorLine}, Column ${cursorColumn || 1}\n`;
+                    }
+                    if (selection) {
+                        focusText += `Selected Text:\n\`\`\`\n${selection}\n\`\`\`\n`;
+                    }
+                    focusText += `------------------\n`;
+                }
+
+                // 4. Calculate Embedding for Query
+                const queryEmbedding = await createEmbedding(userMessage);
+
+                // Build Smart Context
+                const contextFiles = await smartContextBuilder.buildContext(
+                    userMessage,
+                    queryEmbedding,
+                    fileIndex,
+                    currentFile,
+                    { maxFiles: 5, maxTokens: 12000 }
+                );
+
+                if (contextFiles && contextFiles.length > 0) {
+                    contextText = "\n\n--- SEMANTIC CONTEXT (Relevant Files & Symbols) ---\n" +
+                        contextFiles.map((file: any) =>
+                            `File: ${file.path} (Reason: ${file.reason})\n\`\`\`${file.path.split('.').pop()}\n${file.content}\n\`\`\``
+                        ).join("\n\n") + "\n--------------------------------------------------\n";
+                    console.log("Adding Smart context:", contextFiles.length, "relevant chunks/files");
+                }
+            } catch (e) {
+                console.error("Smart Context search failed:", e);
+            }
+
+            // 3. Prepare AI Prompt
+            const fullPrompt = `${projectMapText}${focusText}${contextText}\n\nUser Message: ${userMessage}`;
+            const modelId = getModelIdForRole();
+            const conversationHistory = messages.map(m => ({ role: m.role, content: m.content }));
+
+            // 4. Placeholder for Assistant Response
+            const msgId = generateMessageId("assistant");
+
+            try {
+                let accumulatedResponse = "";
+                await callAI(fullPrompt, modelId, conversationHistory, (token: string) => {
+                    accumulatedResponse += token;
+                    setMessages((prev) =>
+                        prev.map((msg) => (msg.id === msgId ? { ...msg, content: accumulatedResponse } : msg))
+                    );
+                });
+
+                // 🔥 Completion processing for direct chat!
+                processFinalResponse(accumulatedResponse, msgId);
+
             } catch (err) {
-                const errorMessage = err instanceof Error ? err.message : "Bilinmeyen hata oluştu.";
-                setMessages((prev) => [...prev, { id: generateMessageId("error"), role: "system" as const, content: `❌ AI Hatası: ${errorMessage}`, timestamp: Date.now() }]);
+                const errorMessage = err instanceof Error ? err.message : "Unknown error";
+                setMessages((prev) => [...prev, { id: generateMessageId("error"), role: "system", content: `❌ AI Error: ${errorMessage}`, timestamp: Date.now() }]);
             } finally {
                 setIsLoading(false);
             }
         },
-        [isLoading, messages, addMessage]
+        [isLoading, coreMessages]
     );
 
     const handleStopGeneration = useCallback(() => {
@@ -233,6 +453,8 @@ export function useChatMessages({
             sendMessage(lastUserMessage.content);
         }
     }, [messages, sendMessage]);
+    // Added processFinalResponse to the dependency array of the main effect
+    // To avoid circular dependency with sendMessage, we separate them carefully.
 
     const handleNewSession = useCallback(() => {
         const confirmMessage = `Yeni oturum başlatılsın mı?\n\n• ${messages.length} mesaj temizlenecek\n• Sohbet geçmişi silinecek\n• Proje dosyaları korunacak\n\nDevam edilsin mi?`;
@@ -255,19 +477,14 @@ export function useChatMessages({
     }, []);
 
     return {
-        // State
         messages,
         isLoading,
         pendingActions,
         toolApprovalRequest,
         isCoreStreaming,
-
-        // Setters
         setMessages,
         setPendingActions,
         setToolApprovalRequest,
-
-        // Actions
         addMessage,
         sendMessage,
         handleStopGeneration,
@@ -277,70 +494,3 @@ export function useChatMessages({
     };
 }
 
-// Kod bloklarından dosya oluştur (pure function, hook dışında)
-async function createFilesFromCodeBlocks(
-    codeBlocks: Array<{ language: string; code: string; filename?: string }>,
-    projectPath: string,
-    openFile: (path: string) => Promise<void>,
-    addFileToIndex: (path: string, content: string) => Promise<void>,
-    setMessages: React.Dispatch<React.SetStateAction<Message[]>>,
-    currentFile?: string // 🆕
-) {
-    for (const block of codeBlocks) {
-        const ext = EXTENSION_MAP[block.language.toLowerCase()] || "txt";
-        let filename = block.filename;
-        let isModification = false;
-
-        // 🚨 Eğer filename belirtilmemişse VE açık bir dosya varsa -> O dosyayı güncelle!
-        if (!filename && currentFile) {
-            // Uzantı kontrolü gevşetildi: Kullanıcı aktif dosyayı düzenlemek istiyor sayıyoruz.
-            // Sadece çok bariz uyumsuzlukları engelleyebiliriz ama şimdilik doğrudan yazsın.
-            filename = currentFile.split(/[\\\/]/).pop(); // Sadece dosya adı
-            isModification = true;
-        }
-
-        // Eğer hala filename yoksa -> Yeni dosya oluştur
-        if (!filename) {
-            filename = `generated_${Date.now()}.${ext}`;
-        }
-
-        if (!/\.\w+$/.test(filename)) filename = `${filename}.${ext}`;
-        filename = filename.replace(/[<>:"/\\|?*]/g, "_").replace(/\s+/g, "_");
-
-        // Full path oluştur
-        // Eğer isModification ise ve currentFile varsa, tam yolu kullan
-        let filepath = (isModification && currentFile) ? currentFile : (projectPath ? `${projectPath}/${filename}` : filename);
-
-        // Windows path düzeltme (Tauri için)
-        if (projectPath && !filepath.includes(projectPath) && !filepath.includes(":") && !filepath.startsWith("/")) {
-            filepath = `${projectPath}/${filename}`;
-        }
-
-        try {
-            await invoke("write_file", { path: filepath, content: block.code });
-            await openFile(filepath);
-            await addFileToIndex(filepath, block.code);
-            setMessages((prev) => [
-                ...prev,
-                {
-                    id: `file-created-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-                    role: "system",
-                    content: isModification
-                        ? `✅ **${filename}** güncellendi!`
-                        : `✅ **${filename}** oluşturuldu ve açıldı`,
-                    timestamp: Date.now(),
-                },
-            ]);
-        } catch (error) {
-            setMessages((prev) => [
-                ...prev,
-                {
-                    id: `file-error-${Date.now()}-${Math.random().toString(36).substring(2, 8)}`,
-                    role: "system",
-                    content: `❌ ${filename} yazılamadı: ${error}`,
-                    timestamp: Date.now(),
-                },
-            ]);
-        }
-    }
-}

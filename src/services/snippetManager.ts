@@ -21,6 +21,7 @@ export class SnippetManager {
   private readonly DB_NAME = 'CorexAI_Snippets';
   private readonly STORE_NAME = 'snippets';
   private readonly STORAGE_KEY = 'corex_snippets_legacy'; // For migration
+  private snippets: Map<string, Snippet> = new Map();
 
   async init(): Promise<void> {
     return new Promise((resolve, reject) => {
@@ -30,6 +31,8 @@ export class SnippetManager {
       request.onsuccess = () => {
         this.db = request.result;
         console.log('✅ Snippet Manager IndexedDB initialized');
+        this.loadFromStorage();
+        this.addDefaultSnippets();
         resolve();
       };
 
@@ -55,7 +58,7 @@ export class SnippetManager {
     if (!this.db) await this.init();
 
     const id = `snippet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-    
+
     // Generate embedding for AI recommendations
     let embedding: number[] | undefined;
     try {
@@ -96,7 +99,7 @@ export class SnippetManager {
     const updated = { ...snippet, ...updates };
     this.snippets.set(id, updated);
     this.saveToStorage();
-    
+
     console.log(`✅ Snippet güncellendi: ${updated.name}`);
     return true;
   }
@@ -164,7 +167,7 @@ export class SnippetManager {
     snippet.usageCount++;
     this.snippets.set(id, snippet);
     this.saveToStorage();
-    
+
     return snippet;
   }
 
@@ -219,9 +222,9 @@ export class SnippetManager {
 
   // ===== PRIVATE METHODS =====
 
-  private generateId(): string {
-    return `snippet-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-  }
+  // Placeholder if needed for future refactor
+  // private generateId(): string { ... }
+
 
   private saveToStorage(): void {
     try {
@@ -249,7 +252,7 @@ export class SnippetManager {
     // Eğer hiç snippet yoksa, default'ları ekle
     if (this.snippets.size > 0) return;
 
-    const defaults: Array<Omit<Snippet, 'id' | 'createdAt' | 'usageCount'>> = [
+    const defaults: Array<Omit<Snippet, 'id' | 'createdAt' | 'updatedAt' | 'usageCount'>> = [
       {
         name: 'React Component',
         description: 'Functional React component template',

@@ -36,11 +36,12 @@ export type DiffChange = {
 
 export type CodeAction = {
   id: string;
-  type: "create" | "modify" | "delete";
+  type: "create" | "modify" | "delete" | "patch";
   filePath: string;
   content: string;
   oldContent?: string;
   description: string;
+  patchData?: { search: string; replace: string };
 };
 
 export type AIResponse = {

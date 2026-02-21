@@ -1,5 +1,5 @@
-import { useState, useRef, useEffect } from 'react';
-import Editor from './Editor';
+import { useState, useRef, useEffect } from "react";
+import EnhancedEditor from "./EnhancedEditor";
 
 interface SplitViewProps {
   leftFile: {
@@ -12,7 +12,7 @@ interface SplitViewProps {
   };
   onLeftChange: (content: string) => void;
   onRightChange: (content: string) => void;
-  onSave: (side: 'left' | 'right') => void;
+  onSave: (side: "left" | "right") => void;
   onClose: () => void;
 }
 
@@ -22,7 +22,7 @@ export default function SplitView({
   onLeftChange,
   onRightChange,
   onSave,
-  onClose
+  onClose,
 }: SplitViewProps) {
   const [splitPosition, setSplitPosition] = useState(50); // Percentage
   const [isDragging, setIsDragging] = useState(false);
@@ -47,41 +47,39 @@ export default function SplitView({
     };
 
     if (isDragging) {
-      document.addEventListener('mousemove', handleMouseMove);
-      document.addEventListener('mouseup', handleMouseUp);
+      document.addEventListener("mousemove", handleMouseMove);
+      document.addEventListener("mouseup", handleMouseUp);
     }
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
     };
   }, [isDragging]);
 
   return (
     <div className="h-full flex flex-col bg-[var(--color-background)]">
       {/* Header */}
-      <div className="h-10 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center justify-between px-4">
+      <div className="h-10 bg-[var(--color-background)] border-b border-white/5 flex items-center justify-between px-4">
         <div className="flex items-center gap-4">
-          <h3 className="text-sm font-medium text-[var(--color-text)]">
-            📊 Split View
-          </h3>
+          <h3 className="text-sm font-medium text-[var(--color-text)]">📊 Split View</h3>
           <div className="flex items-center gap-2 text-xs text-[var(--color-textSecondary)]">
             <span>{leftFile.path.split(/[\\/]/).pop()}</span>
             <span>↔</span>
             <span>{rightFile.path.split(/[\\/]/).pop()}</span>
           </div>
         </div>
-        
+
         <div className="flex items-center gap-2">
           <button
-            onClick={() => onSave('left')}
+            onClick={() => onSave("left")}
             className="px-2 py-1 text-xs bg-[var(--color-primary)] text-white rounded hover:opacity-80 transition-opacity"
             title="Save Left (Ctrl+S)"
           >
             💾 Left
           </button>
           <button
-            onClick={() => onSave('right')}
+            onClick={() => onSave("right")}
             className="px-2 py-1 text-xs bg-[var(--color-primary)] text-white rounded hover:opacity-80 transition-opacity"
             title="Save Right (Ctrl+Shift+S)"
           >
@@ -100,21 +98,21 @@ export default function SplitView({
       {/* Split Content */}
       <div ref={containerRef} className="flex-1 flex relative">
         {/* Left Panel */}
-        <div 
-          className="bg-[var(--color-background)] border-r border-[var(--color-border)]"
+        <div
+          className="bg-[var(--color-background)] border-r border-white/5"
           style={{ width: `${splitPosition}%` }}
         >
-          <div className="h-8 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center px-3">
+          <div className="h-8 bg-[var(--color-background)] border-b border-white/5 flex items-center px-3">
             <span className="text-xs font-medium text-[var(--color-text)]">
               📄 {leftFile.path.split(/[\\/]/).pop()}
             </span>
           </div>
           <div className="h-[calc(100%-2rem)]">
-            <Editor
+            <EnhancedEditor
               filePath={leftFile.path}
               content={leftFile.content}
               onChange={onLeftChange}
-              onSave={() => onSave('left')}
+              onSave={() => onSave("left")}
             />
           </div>
         </div>
@@ -122,7 +120,7 @@ export default function SplitView({
         {/* Resize Handle */}
         <div
           className={`w-1 bg-[var(--color-border)] hover:bg-[var(--color-primary)] cursor-col-resize transition-colors ${
-            isDragging ? 'bg-[var(--color-primary)]' : ''
+            isDragging ? "bg-[var(--color-primary)]" : ""
           }`}
           onMouseDown={handleMouseDown}
         >
@@ -132,21 +130,18 @@ export default function SplitView({
         </div>
 
         {/* Right Panel */}
-        <div 
-          className="bg-[var(--color-background)]"
-          style={{ width: `${100 - splitPosition}%` }}
-        >
-          <div className="h-8 bg-[var(--color-surface)] border-b border-[var(--color-border)] flex items-center px-3">
+        <div className="bg-[var(--color-background)]" style={{ width: `${100 - splitPosition}%` }}>
+          <div className="h-8 bg-[var(--color-background)] border-b border-white/5 flex items-center px-3">
             <span className="text-xs font-medium text-[var(--color-text)]">
               📄 {rightFile.path.split(/[\\/]/).pop()}
             </span>
           </div>
           <div className="h-[calc(100%-2rem)]">
-            <Editor
+            <EnhancedEditor
               filePath={rightFile.path}
               content={rightFile.content}
               onChange={onRightChange}
-              onSave={() => onSave('right')}
+              onSave={() => onSave("right")}
             />
           </div>
         </div>
@@ -155,11 +150,13 @@ export default function SplitView({
       {/* Footer with comparison stats */}
       <div className="h-6 bg-[var(--color-surface)] border-t border-[var(--color-border)] px-3 flex items-center justify-between text-xs text-[var(--color-textSecondary)]">
         <div className="flex items-center gap-4">
-          <span>Left: {leftFile.content.split('\n').length} lines</span>
-          <span>Right: {rightFile.content.split('\n').length} lines</span>
+          <span>Left: {leftFile.content.split("\n").length} lines</span>
+          <span>Right: {rightFile.content.split("\n").length} lines</span>
         </div>
         <div className="flex items-center gap-2">
-          <span>Split: {splitPosition.toFixed(0)}% / {(100 - splitPosition).toFixed(0)}%</span>
+          <span>
+            Split: {splitPosition.toFixed(0)}% / {(100 - splitPosition).toFixed(0)}%
+          </span>
         </div>
       </div>
     </div>

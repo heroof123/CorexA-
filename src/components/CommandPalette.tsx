@@ -53,13 +53,13 @@ export default function CommandPalette({ isOpen, onClose, commands }: CommandPal
           break;
         case "ArrowDown":
           e.preventDefault();
-          setSelectedIndex(prev => 
+          setSelectedIndex(prev =>
             prev < filteredCommands.length - 1 ? prev + 1 : 0
           );
           break;
         case "ArrowUp":
           e.preventDefault();
-          setSelectedIndex(prev => 
+          setSelectedIndex(prev =>
             prev > 0 ? prev - 1 : filteredCommands.length - 1
           );
           break;
@@ -80,22 +80,22 @@ export default function CommandPalette({ isOpen, onClose, commands }: CommandPal
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black/50 flex items-start justify-center pt-20 z-50">
-      <div 
-        className="w-full max-w-2xl bg-[#252525] border border-neutral-700 rounded-lg shadow-2xl overflow-hidden"
+    <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-start justify-center pt-20 z-50 animate-fade-in" onClick={onClose}>
+      <div
+        className="w-full max-w-2xl glass-panel rounded-2xl shadow-[0_0_50px_rgba(0,0,0,0.5)] overflow-hidden border border-white/10"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Search Input */}
-        <div className="p-4 border-b border-neutral-700">
-          <div className="relative">
-            <svg className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-neutral-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        <div className="p-6 border-b border-white/5 bg-white/5">
+          <div className="relative group">
+            <svg className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-neutral-500 group-focus-within:text-[var(--neon-blue)] transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
             </svg>
             <input
               ref={inputRef}
               type="text"
-              placeholder="Komut ara... (örn: save, open, terminal)"
-              className="w-full pl-10 pr-4 py-3 bg-[#1e1e1e] border border-neutral-700 rounded-lg text-white placeholder-neutral-500 focus:outline-none focus:border-blue-500 text-sm"
+              placeholder="Komutları arayın... (örn. kaydet, terminal)"
+              className="w-full pl-12 pr-6 py-4 bg-black/30 border border-white/5 rounded-xl text-white placeholder-neutral-500 focus:outline-none focus:border-[var(--neon-blue)] focus:neon-glow-blue transition-all text-sm font-medium"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
             />
@@ -103,17 +103,15 @@ export default function CommandPalette({ isOpen, onClose, commands }: CommandPal
         </div>
 
         {/* Commands List */}
-        <div className="max-h-96 overflow-y-auto">
+        <div className="max-h-[28rem] overflow-y-auto custom-scrollbar bg-black/20">
           {filteredCommands.length === 0 ? (
-            <div className="p-8 text-center text-neutral-500">
-              <svg className="w-12 h-12 mx-auto mb-4 text-neutral-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 12h6m-6-4h6m2 5.291A7.962 7.962 0 0112 15c-2.34 0-4.47-.881-6.08-2.33" />
-              </svg>
-              <p className="text-sm">"{query}" için komut bulunamadı</p>
-              <p className="text-xs text-neutral-600 mt-1">Farklı anahtar kelimeler deneyin</p>
+            <div className="p-12 text-center text-neutral-500">
+              <div className="text-4xl mb-4 opacity-20">🔍</div>
+              <p className="text-sm font-medium">No commands found for "{query}"</p>
+              <p className="text-xs text-neutral-600 mt-2">Try different keywords or check spelling</p>
             </div>
           ) : (
-            <div className="py-2">
+            <div className="p-2 space-y-1">
               {filteredCommands.map((command, index) => (
                 <button
                   key={command.id}
@@ -121,29 +119,34 @@ export default function CommandPalette({ isOpen, onClose, commands }: CommandPal
                     command.action();
                     onClose();
                   }}
-                  className={`w-full text-left px-4 py-3 hover:bg-neutral-700 transition-colors ${
-                    index === selectedIndex ? 'bg-blue-600/20 border-l-2 border-blue-500' : ''
-                  }`}
+                  className={`w-full text-left px-4 py-3.5 rounded-xl transition-all duration-200 border border-transparent ${index === selectedIndex
+                    ? 'bg-blue-500/10 border-blue-500/50 shadow-[0_0_15px_rgba(59,130,246,0.15)] ring-1 ring-blue-500/20'
+                    : 'hover:bg-white/5'
+                    }`}
                 >
-                  <div className="flex items-center gap-3">
-                    <span className="text-lg">{command.icon}</span>
+                  <div className="flex items-center gap-4">
+                    <span className={`text-xl transition-transform duration-300 ${index === selectedIndex ? 'scale-110' : ''}`}>
+                      {command.icon}
+                    </span>
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between">
-                        <h3 className="text-sm font-medium text-white truncate">
+                        <h3 className={`text-sm font-bold truncate transition-colors ${index === selectedIndex ? 'text-white' : 'text-neutral-300'}`}>
                           {command.title}
                         </h3>
                         {command.shortcut && (
-                          <span className="text-xs text-neutral-500 bg-neutral-800 px-2 py-1 rounded">
+                          <span className="text-[10px] font-black tracking-widest text-white/30 bg-white/5 px-2 py-1 rounded-md border border-white/5">
                             {command.shortcut}
                           </span>
                         )}
                       </div>
-                      <p className="text-xs text-neutral-400 truncate mt-1">
-                        {command.description}
-                      </p>
-                      <span className="text-xs text-neutral-600 mt-1">
-                        {command.category}
-                      </span>
+                      <div className="flex items-center gap-3 mt-1">
+                        <p className="text-[11px] text-neutral-500 truncate flex-1 leading-none">
+                          {command.description}
+                        </p>
+                        <span className="text-[9px] font-black uppercase tracking-widest text-neutral-600 bg-white/5 px-1.5 py-0.5 rounded leading-none shrink-0">
+                          {command.category}
+                        </span>
+                      </div>
                     </div>
                   </div>
                 </button>
@@ -153,14 +156,14 @@ export default function CommandPalette({ isOpen, onClose, commands }: CommandPal
         </div>
 
         {/* Footer */}
-        <div className="p-3 border-t border-neutral-700 bg-[#1e1e1e]">
-          <div className="flex items-center justify-between text-xs text-neutral-500">
-            <div className="flex items-center gap-4">
-              <span>↑↓ Gezin</span>
-              <span>Enter Seç</span>
-              <span>Esc Kapat</span>
+        <div className="px-6 py-4 border-t border-white/5 bg-white/5">
+          <div className="flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-neutral-600">
+            <div className="flex items-center gap-6">
+              <div className="flex items-center gap-2 select-none"><span className="text-neutral-400">↑↓</span> Navigate</div>
+              <div className="flex items-center gap-2 select-none"><span className="text-neutral-400">Enter</span> Select</div>
+              <div className="flex items-center gap-2 select-none"><span className="text-neutral-400">Esc</span> Close</div>
             </div>
-            <span>{filteredCommands.length} komut</span>
+            <span className="text-[var(--neon-blue)] opacity-50">{filteredCommands.length} commands</span>
           </div>
         </div>
       </div>

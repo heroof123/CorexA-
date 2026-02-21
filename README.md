@@ -43,11 +43,11 @@
 - **Database Browser** - SQLite, MySQL, PostgreSQL
 - **API Testing** - Postman-like REST client
 
-### ⚡ Performance
-- **Incremental Indexing** - Only index changed files
-- **Smart Caching** - LRU cache for embeddings
-- **Batch Processing** - Parallel file operations
-- **Memory Efficient** - Automatic cleanup
+### 🎨 User Interface
+- **Professional Light Theme** - High-contrast, GitHub-inspired aesthetic
+- **Dynamic Theming** - Peak contrast and professional color palettes
+- **Visual Project Graph** - SVG-based dependency and structure visualization
+- **Optimized Layout** - Razor-sharp text and clear borders
 
 ---
 
@@ -353,12 +353,14 @@ MIT License - see [LICENSE](LICENSE) file
 
 ## 🗺️ Roadmap
 
-### v0.2.0 (Next Release)
-- [ ] Multi-file refactoring
-- [ ] Test generation
-- [ ] Code review automation
+### v0.2.0 (Current Version)
+- [x] Professional Light Theme implementation
+- [x] Visual Project Graph visualization
+- [x] Enhanced GGUF Model Browser with HF Search
+- [x] AI Knowledge Base (.corexrules support)
+- [x] Cursor-Aware Context enrichment
 - [ ] Plugin system
-- [ ] Improved AI context management
+- [ ] Automated Test generation
 
 ### v0.3.0
 - [ ] Remote development

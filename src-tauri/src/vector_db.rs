@@ -7,8 +7,9 @@ use serde::{Deserialize, Serialize};
 use std::error::Error;
 use std::sync::Arc;
 use tokio::sync::Mutex;
-use arrow_array::{RecordBatch, RecordBatchIterator, StringArray, Float32Array, UInt64Array};
+use arrow_array::{RecordBatch, RecordBatchIterator, StringArray, Float32Array, UInt64Array, FixedSizeListArray, Array};
 use arrow_schema::{Schema, Field, DataType};
+use futures_util::StreamExt;
 use std::sync::Arc as StdArc;
 
 /// Represents a code chunk stored in the vector database
@@ -171,16 +172,37 @@ impl VectorDB {
         let table = self.get_table().await?;
         
         // Perform vector similarity search
-        let mut query = table.vector_search(query_embedding)?;
-        query = query.limit(top_k);
+        let query = table.vector_search(query_embedding)?;
+        let mut stream = query.limit(top_k).execute().await?;
+        let mut chunks = Vec::new();
         
-        let _results = query.execute().await?;
-        
-        // Convert RecordBatch back to CodeChunk
-        let chunks = Vec::new();
-        
-        // TODO: Parse RecordBatch to CodeChunk
-        // For now, return empty vec
+        while let Some(batch_result) = stream.next().await {
+            let batch = batch_result?;
+            
+            let ids = batch.column_by_name("id").and_then(|c| c.as_any().downcast_ref::<StringArray>()).ok_or_else(|| "ID column not found".to_string())?;
+            let file_paths = batch.column_by_name("file_path").and_then(|c| c.as_any().downcast_ref::<StringArray>()).ok_or_else(|| "File path column not found".to_string())?;
+            let contents = batch.column_by_name("content").and_then(|c| c.as_any().downcast_ref::<StringArray>()).ok_or_else(|| "Content column not found".to_string())?;
+            let embeddings = batch.column_by_name("embedding").and_then(|c| c.as_any().downcast_ref::<FixedSizeListArray>()).ok_or_else(|| "Embedding column not found".to_string())?;
+            let symbol_names = batch.column_by_name("symbol_name").and_then(|c| c.as_any().downcast_ref::<StringArray>()).ok_or_else(|| "Symbol name column not found".to_string())?;
+            let chunk_types = batch.column_by_name("chunk_type").and_then(|c| c.as_any().downcast_ref::<StringArray>()).ok_or_else(|| "Chunk type column not found".to_string())?;
+            let timestamps = batch.column_by_name("timestamp").and_then(|c| c.as_any().downcast_ref::<UInt64Array>()).ok_or_else(|| "Timestamp column not found".to_string())?;
+            
+            for i in 0..batch.num_rows() {
+                let embedding_list = embeddings.value(i);
+                let embedding_data = embedding_list.as_any().downcast_ref::<Float32Array>().ok_or_else(|| "Embedding values not found".to_string())?;
+                let embedding_vec: Vec<f32> = (0..embedding_data.len()).map(|j| embedding_data.value(j)).collect();
+                
+                chunks.push(CodeChunk {
+                    id: ids.value(i).to_string(),
+                    file_path: file_paths.value(i).to_string(),
+                    content: contents.value(i).to_string(),
+                    embedding: embedding_vec,
+                    symbol_name: if symbol_names.is_null(i) { None } else { Some(symbol_names.value(i).to_string()) },
+                    chunk_type: chunk_types.value(i).to_string(),
+                    timestamp: timestamps.value(i),
+                });
+            }
+        }
         
         Ok(chunks)
     }

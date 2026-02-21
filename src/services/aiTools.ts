@@ -927,7 +927,7 @@ async function createArtifact(filename: string, content: string): Promise<any> {
     console.log(`📝 Creating artifact: ${path}`);
 
     // Use existing writeFile logic
-    const result = await writeFile(path, content);
+    await writeFile(path, content);
 
     return {
       success: true,

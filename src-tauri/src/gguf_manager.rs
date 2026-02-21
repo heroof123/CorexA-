@@ -2,10 +2,10 @@ use llama_cpp_2::context::params::LlamaContextParams;
 use llama_cpp_2::llama_backend::LlamaBackend;
 use llama_cpp_2::llama_batch::LlamaBatch;
 use llama_cpp_2::model::params::LlamaModelParams;
-use llama_cpp_2::model::{LlamaModel, AddBos};
+use llama_cpp_2::model::{AddBos, LlamaModel};
+use log::{error, info};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use log::{info, error};
 
 // Tauri state için wrapper - PUBLIC!
 pub struct GgufState {
@@ -34,21 +34,19 @@ pub struct GgufModelManager;
 impl GgufModelManager {
     pub fn load_model(
         state: &Arc<Mutex<GgufState>>,
-        model_path: &str, 
-        n_ctx: u32, 
-        n_gpu_layers: u32
+        model_path: &str,
+        n_ctx: u32,
+        n_gpu_layers: u32,
     ) -> Result<String, String> {
         info!("GGUF model loading: {}", model_path);
-        
+
         if !Path::new(model_path).exists() {
             return Err(format!("Model file not found: {}", model_path));
         }
 
-        let backend = LlamaBackend::init()
-            .map_err(|e| format!("Backend init failed: {:?}", e))?;
+        let backend = LlamaBackend::init().map_err(|e| format!("Backend init failed: {:?}", e))?;
 
-        let model_params = LlamaModelParams::default()
-            .with_n_gpu_layers(n_gpu_layers);
+        let model_params = LlamaModelParams::default().with_n_gpu_layers(n_gpu_layers);
 
         let model = LlamaModel::load_from_file(&backend, model_path, &model_params)
             .map_err(|e| format!("Model load failed: {:?}", e))?;
@@ -65,44 +63,47 @@ impl GgufModelManager {
 
     pub fn generate(
         state: &Arc<Mutex<GgufState>>,
-        prompt: &str, 
-        max_tokens: u32, 
-        _temperature: f32
+        prompt: &str,
+        max_tokens: u32,
+        _temperature: f32,
     ) -> Result<String, String> {
         let mut state_guard = state.lock().unwrap();
-        
-        let backend = state_guard.backend.as_ref()
-            .ok_or("Backend not loaded")?;
-        let model = state_guard.model.as_ref()
-            .ok_or("Model not loaded")?;
+
+        let backend = state_guard.backend.as_ref().ok_or("Backend not loaded")?;
+        let model = state_guard.model.as_ref().ok_or("Model not loaded")?;
         let n_ctx = state_guard.n_ctx;
 
         let ctx_params = LlamaContextParams::default()
             .with_n_ctx(std::num::NonZero::new(n_ctx))
             .with_n_batch(512);
 
-        let mut context = model.new_context(backend, ctx_params)
+        let mut context = model
+            .new_context(backend, ctx_params)
             .map_err(|e| format!("Context creation failed: {:?}", e))?;
 
-        let tokens = model.str_to_token(prompt, AddBos::Always)
+        let tokens = model
+            .str_to_token(prompt, AddBos::Always)
             .map_err(|e| format!("Tokenization failed: {:?}", e))?;
 
         let mut batch = LlamaBatch::new(512, 1);
-        
+
         for (i, token) in tokens.iter().enumerate() {
-            batch.add(*token, i as i32, &[0], i == tokens.len() - 1)
+            batch
+                .add(*token, i as i32, &[0], i == tokens.len() - 1)
                 .map_err(|e| format!("Batch add failed: {:?}", e))?;
         }
 
-        context.decode(&mut batch)
+        context
+            .decode(&mut batch)
             .map_err(|e| format!("Decode failed: {:?}", e))?;
 
         let mut response = String::new();
         let mut n_cur = batch.n_tokens();
+        let mut decoder = encoding_rs::UTF_8.new_decoder();
 
         for _ in 0..max_tokens {
             let candidates = context.candidates();
-            
+
             let new_token_id = if let Some(first) = candidates.into_iter().next() {
                 first.id()
             } else {
@@ -113,16 +114,19 @@ impl GgufModelManager {
                 break;
             }
 
-            let token_str = model.token_to_str(new_token_id, llama_cpp_2::model::Special::Tokenize)
+            let token_str = model
+                .token_to_piece(new_token_id, &mut decoder, false, None)
                 .map_err(|e| format!("Token to str failed: {:?}", e))?;
-            
+
             response.push_str(&token_str);
 
             batch.clear();
-            batch.add(new_token_id, n_cur, &[0], true)
+            batch
+                .add(new_token_id, n_cur, &[0], true)
                 .map_err(|e| format!("Batch add failed: {:?}", e))?;
 
-            context.decode(&mut batch)
+            context
+                .decode(&mut batch)
                 .map_err(|e| format!("Decode failed: {:?}", e))?;
 
             n_cur += 1;
@@ -146,4 +150,3 @@ impl GgufModelManager {
         state_guard.model_path = None;
     }
 }
-

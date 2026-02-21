@@ -7,12 +7,17 @@ interface LayoutState {
   leftSidebarWidth: number;
   rightSidebarWidth: number;
   bottomPanelHeight: number;
+  isZenMode: boolean;
 }
 
 interface LayoutContextType extends LayoutState {
   toggleLeftSidebar: () => void;
   toggleRightSidebar: () => void;
   toggleBottomPanel: () => void;
+  toggleZenMode: () => void;
+  setLeftSidebarVisible: (visible: boolean) => void;
+  setRightSidebarVisible: (visible: boolean) => void;
+  setBottomPanelVisible: (visible: boolean) => void;
   setLeftSidebarWidth: (width: number) => void;
   setRightSidebarWidth: (width: number) => void;
   setBottomPanelHeight: (height: number) => void;
@@ -27,7 +32,8 @@ const defaultLayout: LayoutState = {
   showBottomPanel: true,
   leftSidebarWidth: 320,
   rightSidebarWidth: 256,
-  bottomPanelHeight: 256
+  bottomPanelHeight: 256,
+  isZenMode: false
 };
 
 const LayoutContext = createContext<LayoutContextType | undefined>(undefined);
@@ -49,6 +55,44 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
 
   const toggleBottomPanel = () => {
     setLayout(prev => ({ ...prev, showBottomPanel: !prev.showBottomPanel }));
+  };
+
+  const setLeftSidebarVisible = (visible: boolean) => {
+    setLayout(prev => ({ ...prev, showLeftSidebar: visible }));
+  };
+
+  const setRightSidebarVisible = (visible: boolean) => {
+    setLayout(prev => ({ ...prev, showRightSidebar: visible }));
+  };
+
+  const setBottomPanelVisible = (visible: boolean) => {
+    setLayout(prev => ({ ...prev, showBottomPanel: visible }));
+  };
+
+  const toggleZenMode = () => {
+    setLayout(prev => {
+      const newZenMode = !prev.isZenMode;
+      if (newZenMode) {
+        // Zen moduna girerken her şeyi gizle
+        return {
+          ...prev,
+          isZenMode: true,
+          showLeftSidebar: false,
+          showRightSidebar: false,
+          showBottomPanel: false
+        };
+      } else {
+        // Zen modundan çıkarken varsayılanlara (veya önceki duruma?) dön
+        // Basitlik için şimdilik varsayılan görünüme dönüyoruz
+        return {
+          ...prev,
+          isZenMode: false,
+          showLeftSidebar: true,
+          showRightSidebar: true,
+          showBottomPanel: true
+        };
+      }
+    });
   };
 
   const setLeftSidebarWidth = (width: number) => {
@@ -99,6 +143,10 @@ export function LayoutProvider({ children }: { children: ReactNode }) {
         toggleLeftSidebar,
         toggleRightSidebar,
         toggleBottomPanel,
+        toggleZenMode,
+        setLeftSidebarVisible,
+        setRightSidebarVisible,
+        setBottomPanelVisible,
         setLeftSidebarWidth,
         setRightSidebarWidth,
         setBottomPanelHeight,

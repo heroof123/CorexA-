@@ -905,8 +905,8 @@ export function getModelIdForRole(): string {
   // Aktif provider'lardan uygun modeli bul
   const savedProviders = localStorage.getItem('corex-ai-providers');
   if (!savedProviders) {
-    console.warn('⚠️ Provider bulunamadı, varsayılan model kullanılıyor');
-    throw new Error('Aktif AI modeli bulunamadı. Lütfen AI ayarlarından bir model aktif edin.');
+    console.warn('⚠️ Provider bulunamadı');
+    return "default-chat"; // Fallback instead of crash
   }
 
   try {

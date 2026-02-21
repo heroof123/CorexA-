@@ -20,25 +20,25 @@ export class ProactiveAssistant {
 
   async analyzeProject(fileIndex: FileIndex[], currentFile?: string): Promise<ProactiveSuggestion[]> {
     const now = Date.now();
-    
+
     // Kullanıcı öneriler istemiyorsa ve çok yakın zamanda analiz yaptıysak, boş dön
     if (!this.userRequestedSuggestions && now - this.lastAnalysis < this.analysisInterval) {
       return [];
     }
-    
+
     this.lastAnalysis = now;
     this.userRequestedSuggestions = false; // Reset flag
-    
+
     // 🧠 TASK 29: Ghost Developer kullan
     const ghostAnalysis = await ghostDeveloper.analyzeProject(fileIndex);
-    
+
     // Ghost suggestions'ı ProactiveSuggestion formatına çevir
     const suggestions = this.convertGhostSuggestions(ghostAnalysis.suggestions);
-    
+
     // Legacy critical issues (fallback)
     if (suggestions.length === 0) {
       suggestions.push(...this.analyzeCriticalIssues(fileIndex));
-      
+
       // Mevcut dosya analizi (sadece kullanıcı isterse)
       if (currentFile) {
         const file = fileIndex.find(f => f.path === currentFile);
@@ -57,7 +57,7 @@ export class ProactiveAssistant {
       })
       .slice(0, 3); // Maksimum 3 öneri
   }
-  
+
   /**
    * 🧠 TASK 29: Convert Ghost suggestions to Proactive suggestions
    */
@@ -73,7 +73,7 @@ export class ProactiveAssistant {
         } else if (gs.type === 'refactor' || gs.type === 'complexity') {
           type = 'improvement';
         }
-        
+
         // Map priority
         let priority: 'low' | 'medium' | 'high' = 'medium';
         if (gs.priority >= 8) {
@@ -83,7 +83,7 @@ export class ProactiveAssistant {
         } else {
           priority = 'low';
         }
-        
+
         // Map icon
         let icon = '💡';
         if (gs.type === 'unused-code') icon = '🧹';
@@ -92,7 +92,7 @@ export class ProactiveAssistant {
         else if (gs.type === 'architecture') icon = '🏗️';
         else if (gs.type === 'dependency') icon = '🔗';
         else if (gs.type === 'best-practice') icon = '✨';
-        
+
         return {
           id: gs.id,
           type,
@@ -112,9 +112,9 @@ export class ProactiveAssistant {
 
   private analyzeCriticalIssues(fileIndex: FileIndex[]): ProactiveSuggestion[] {
     const suggestions: ProactiveSuggestion[] = [];
-    
+
     // Sadece gerçekten kritik sorunları kontrol et
-    
+
     // Console.log kontrolü (yüksek öncelik)
     const filesWithConsoleLog = fileIndex.filter(f => f.content.includes('console.log'));
     if (filesWithConsoleLog.length > 3) {
@@ -151,7 +151,7 @@ export class ProactiveAssistant {
     const content = file.content;
 
     // Sadece kritik dosya sorunları
-    
+
     // Console.log kontrolü
     if (content.includes('console.log')) {
       suggestions.push({
@@ -166,6 +166,26 @@ export class ProactiveAssistant {
     }
 
     return suggestions;
+  }
+
+  // 🧠 TASK 29: Aktif dosyayı analiz etme (Ghost Developer entegrasyonu)
+  async analyzeActiveFile(filePath: string, fileContent: string): Promise<ProactiveSuggestion[]> {
+    const ghostSuggestions = await ghostDeveloper.analyzeActiveFile(filePath, fileContent);
+    return this.convertGhostSuggestions(ghostSuggestions);
+  }
+
+  // 🧠 TASK 29: AI Review (Ghost Developer entegrasyonu)
+  async getAIReview(fileIndex: FileIndex[], currentFile?: string): Promise<string> {
+    if (!currentFile) return "Analiz edilecek dosya seçilmedi.";
+
+    const file = fileIndex.find(f => f.path === currentFile);
+    if (!file) return `${currentFile} bulunamadı.`;
+
+    const ghostSuggestions = await ghostDeveloper.analyzeActiveFile(file.path, file.content);
+    if (ghostSuggestions.length === 0) return "Bu dosyada şu an için kritik bir sorun tespit edilmedi.";
+
+    return `### 👻 Ghost Review: ${currentFile}\n\n` +
+      ghostSuggestions.map(s => `- **${s.title}**: ${s.description} (${s.suggestion})`).join('\n');
   }
 
   // Get contextual suggestions based on user activity

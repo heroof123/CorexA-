@@ -58,12 +58,6 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
       icon: '📊',
       visible: showBottomPanel,
       shortcut: 'Ctrl + J'
-    },
-    {
-      id: 'statusBar',
-      name: 'Status Bar',
-      icon: '📍',
-      visible: true
     }
   ]);
 
@@ -113,7 +107,7 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
         break;
       default:
         // Diğer elementler için state güncelle
-        setElements(prev => prev.map(el => 
+        setElements(prev => prev.map(el =>
           el.id === id ? { ...el, visible: !el.visible } : el
         ));
     }
@@ -132,7 +126,7 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
     <>
       {/* Backdrop */}
       <div className="fixed inset-0 bg-black/50 z-50" onClick={onClose} />
-      
+
       {/* Modal */}
       <div className="fixed inset-0 flex items-center justify-center z-50 p-4">
         <div className="bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg shadow-2xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
@@ -142,7 +136,7 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
               <span className="text-lg">🎨</span>
               <h3 className="text-sm font-semibold text-[var(--color-text)]">Customize Layout</h3>
             </div>
-            
+
             <div className="flex items-center gap-2">
               <button
                 onClick={resetToDefault}
@@ -169,7 +163,7 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
                 <h4 className="text-sm font-semibold text-[var(--color-text)]">Visibility</h4>
                 <span className="text-xs text-[var(--color-textSecondary)]">👁️</span>
               </div>
-              
+
               <div className="space-y-3">
                 {elements.map(element => (
                   <div key={element.id} className="flex items-center justify-between p-3 bg-[var(--color-background)] border border-[var(--color-border)] rounded">
@@ -185,7 +179,7 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
                         <span className="text-sm font-medium">{element.name}</span>
                       </label>
                     </div>
-                    
+
                     {element.shortcut && (
                       <div className="flex items-center gap-1 text-xs text-[var(--color-textSecondary)]">
                         {element.shortcut.split(' + ').map((key, index) => (
@@ -209,17 +203,16 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
                 <h4 className="text-sm font-semibold text-[var(--color-text)]">Primary Side Bar Position</h4>
                 <span className="text-xs text-purple-400">📍</span>
               </div>
-              
+
               <div className="flex gap-2">
                 {['left', 'right'].map(position => (
                   <button
                     key={position}
                     onClick={() => setSideBarPosition(position as 'left' | 'right')}
-                    className={`flex-1 p-3 border rounded transition-colors ${
-                      sideBarPosition === position
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
-                        : 'border-[var(--color-border)] hover:border-[var(--color-primary)]'
-                    }`}
+                    className={`flex-1 p-3 border rounded transition-colors ${sideBarPosition === position
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
+                      : 'border-[var(--color-border)] hover:border-[var(--color-primary)]'
+                      }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm">{position === 'left' ? '⬅️' : '➡️'}</span>
@@ -236,7 +229,7 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
                 <h4 className="text-sm font-semibold text-[var(--color-text)]">Panel Alignment</h4>
                 <span className="text-xs text-purple-400">📐</span>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-2">
                 {[
                   { id: 'left', label: 'Left', icon: '⬅️' },
@@ -247,11 +240,10 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
                   <button
                     key={alignment.id}
                     onClick={() => setPanelAlignment(alignment.id as any)}
-                    className={`p-3 border rounded transition-colors ${
-                      panelAlignment === alignment.id
-                        ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
-                        : 'border-[var(--color-border)] hover:border-[var(--color-primary)]'
-                    }`}
+                    className={`p-3 border rounded transition-colors ${panelAlignment === alignment.id
+                      ? 'border-[var(--color-primary)] bg-[var(--color-primary)]/10'
+                      : 'border-[var(--color-border)] hover:border-[var(--color-primary)]'
+                      }`}
                   >
                     <div className="flex items-center gap-2">
                       <span className="text-sm">{alignment.icon}</span>
@@ -268,14 +260,14 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
                 <h4 className="text-sm font-semibold text-[var(--color-text)]">Quick Actions</h4>
                 <span className="text-xs text-purple-400">⚡</span>
               </div>
-              
+
               <div className="grid grid-cols-2 gap-2">
                 <button
                   onClick={() => {
                     // Full Screen mode
-                    setElements(prev => prev.map(el => ({ 
-                      ...el, 
-                      visible: el.id === 'menuBar' || el.id === 'statusBar' 
+                    setElements(prev => prev.map(el => ({
+                      ...el,
+                      visible: el.id === 'menuBar'
                     })));
                   }}
                   className="p-3 border border-[var(--color-border)] rounded hover:border-[var(--color-primary)] transition-colors"
@@ -285,13 +277,13 @@ export default function CustomizeLayout({ isOpen, onClose }: CustomizeLayoutProp
                     <span className="text-sm">Full Screen</span>
                   </div>
                 </button>
-                
+
                 <button
                   onClick={() => {
                     // Zen Mode
-                    setElements(prev => prev.map(el => ({ 
-                      ...el, 
-                      visible: false 
+                    setElements(prev => prev.map(el => ({
+                      ...el,
+                      visible: false
                     })));
                   }}
                   className="p-3 border border-[var(--color-border)] rounded hover:border-[var(--color-primary)] transition-colors"

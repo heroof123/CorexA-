@@ -428,18 +428,17 @@ pub async fn chat_with_gguf_model(
     let mut response = String::new();
     let mut decode_errors = 0;
     
+    let mut decoder = encoding_rs::UTF_8.new_decoder();
     for (idx, token_id) in response_tokens.iter().enumerate() {
-        // Try normal decode first
-        match model.token_to_str(*token_id, llama_cpp_2::model::Special::Tokenize) {
+        // Use modern token_to_piece with 4 arguments as required by llama-cpp-2 v0.1.133
+        match model.token_to_piece(*token_id, &mut decoder, false, None) {
             Ok(token_str) => {
-                // Başarılı decode
                 response.push_str(&token_str);
             },
-            Err(_) => {
-                // Decode başarısız - token byte'larını direkt al
+            Err(e) => {
                 decode_errors += 1;
                 if decode_errors <= 10 {
-                    info!("⏭️ Token {}: decode failed (total errors: {})", idx, decode_errors);
+                    info!("⏭️ Token {}: decode failed: {:?}", idx, e);
                 }
             }
         }

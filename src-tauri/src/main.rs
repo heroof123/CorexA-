@@ -31,7 +31,9 @@ use commands::{
     download_gguf_model,
     execute_terminal_command,
     get_all_files,
+    git_log_project,
     index_file_vector,
+    index_manual_vector,
     // Vector DB commands
     init_vector_db,
     invalidate_file_cache,
@@ -120,6 +122,7 @@ pub fn run() {
             commands::git_push,
             commands::git_pull,
             commands::git_log_file,
+            commands::git_log_project,
             commands::git_blame,
             commands::execute_command,
             load_gguf_model,
@@ -142,6 +145,7 @@ pub fn run() {
             init_vector_db,
             vector_search,
             index_file_vector,
+            index_manual_vector,
             delete_file_index,
             // RAG Pipeline commands
             analyze_query_intent,

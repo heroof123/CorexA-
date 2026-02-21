@@ -1,9 +1,9 @@
 // services/ghostDeveloper.ts - Ghost Developer Mode
 // 🧠 TASK 29: Background code analysis and proactive suggestions
 
-import { 
-  parseFile, 
-  buildDependencyGraph, 
+import {
+  parseFile,
+  buildDependencyGraph,
   getComplexityMetrics,
   type FileAnalysis,
   type DependencyGraph,
@@ -48,8 +48,36 @@ export class GhostDeveloper {
   private analysisCache: Map<string, FileAnalysis> = new Map();
   private dependencyGraph: DependencyGraph | null = null;
   private lastAnalysis: number = 0;
-  private analysisInterval: number = 300000; // 5 dakika
+  private analysisInterval: number = 60000; // 1 dakika
   private isAnalyzing: boolean = false;
+
+  /**
+   * 🎯 Analyze active file deep - sadece aktif dosyaya odaklan
+   */
+  async analyzeActiveFile(path: string, content: string): Promise<GhostSuggestion[]> {
+    if (this.isAnalyzing) return [];
+
+    // Yalnızca kod dosyaları
+    if (!/\.(ts|tsx|js|jsx)$/.test(path)) return [];
+
+    try {
+      this.isAnalyzing = true;
+      const analysis = await parseFile(path, content);
+      this.analysisCache.set(path, analysis);
+
+      return this.generateSuggestions([analysis], [{
+        path,
+        content,
+        embedding: [],
+        lastModified: Date.now()
+      }]);
+    } catch (e) {
+      console.warn('⚠️ Active file analysis failed:', path, e);
+      return [];
+    } finally {
+      this.isAnalyzing = false;
+    }
+  }
 
   /**
    * 🔍 Background analysis - tüm projeyi analiz et
@@ -60,7 +88,7 @@ export class GhostDeveloper {
     metrics: CodeMetrics;
   }> {
     const now = Date.now();
-    
+
     // Çok sık analiz yapma
     if (this.isAnalyzing || (now - this.lastAnalysis < this.analysisInterval)) {
       return {
@@ -69,16 +97,16 @@ export class GhostDeveloper {
         metrics: this.getEmptyMetrics()
       };
     }
-    
+
     this.isAnalyzing = true;
     this.lastAnalysis = now;
-    
+
     console.log('👻 Ghost Developer: Starting background analysis...');
-    
+
     try {
       // 1. Parse all TypeScript/JavaScript files
       const analyses: FileAnalysis[] = [];
-      
+
       for (const file of fileIndex) {
         if (/\.(ts|tsx|js|jsx)$/.test(file.path)) {
           try {
@@ -90,26 +118,26 @@ export class GhostDeveloper {
           }
         }
       }
-      
+
       // 2. Build dependency graph
       if (analyses.length > 0) {
         this.dependencyGraph = buildDependencyGraph(analyses);
       }
-      
+
       // 3. Generate suggestions
       const suggestions = this.generateSuggestions(analyses, fileIndex);
-      
+
       // 4. Generate architecture insights
       const insights = this.generateArchitectureInsights(analyses);
-      
+
       // 5. Calculate metrics
       const metrics = this.calculateMetrics(analyses);
-      
+
       console.log('✅ Ghost Developer: Analysis complete');
       console.log(`   - ${suggestions.length} suggestions`);
       console.log(`   - ${insights.length} insights`);
       console.log(`   - ${metrics.totalFiles} files analyzed`);
-      
+
       return { suggestions, insights, metrics };
     } finally {
       this.isAnalyzing = false;
@@ -121,25 +149,25 @@ export class GhostDeveloper {
    */
   private generateSuggestions(analyses: FileAnalysis[], fileIndex: FileIndex[]): GhostSuggestion[] {
     const suggestions: GhostSuggestion[] = [];
-    
+
     // 1. Unused exports
     suggestions.push(...this.findUnusedExports(analyses));
-    
+
     // 2. High complexity functions
     suggestions.push(...this.findHighComplexityCode(analyses));
-    
+
     // 3. Missing error handling
     suggestions.push(...this.findMissingErrorHandling(fileIndex));
-    
+
     // 4. Console.log statements
     suggestions.push(...this.findConsoleStatements(fileIndex));
-    
+
     // 5. Large files
     suggestions.push(...this.findLargeFiles(analyses));
-    
+
     // 6. Duplicate code patterns
     suggestions.push(...this.findDuplicatePatterns(analyses));
-    
+
     // Sort by priority
     return suggestions.sort((a, b) => b.priority - a.priority);
   }
@@ -149,16 +177,16 @@ export class GhostDeveloper {
    */
   private generateArchitectureInsights(analyses: FileAnalysis[]): ArchitectureInsight[] {
     const insights: ArchitectureInsight[] = [];
-    
+
     // 1. Circular dependencies
     insights.push(...this.detectCircularDependencies());
-    
+
     // 2. God classes (too many responsibilities)
     insights.push(...this.detectGodClasses(analyses));
-    
+
     // 3. Dead code (unused files)
     insights.push(...this.detectDeadCode(analyses));
-    
+
     return insights;
   }
 
@@ -169,26 +197,26 @@ export class GhostDeveloper {
     const totalFiles = analyses.length;
     const totalLines = analyses.reduce((sum, a) => sum + a.linesOfCode, 0);
     const totalSymbols = analyses.reduce((sum, a) => sum + a.symbols.length, 0);
-    
+
     const complexities = analyses.map(a => {
       const metrics = getComplexityMetrics(a);
       return metrics.averageComplexity;
     });
-    
+
     const averageComplexity = complexities.length > 0
       ? complexities.reduce((sum, c) => sum + c, 0) / complexities.length
       : 0;
-    
+
     const highComplexityFiles = analyses
       .filter(a => {
         const metrics = getComplexityMetrics(a);
         return metrics.averageComplexity > 10;
       })
       .map(a => a.filePath);
-    
+
     const unusedExports = this.countUnusedExports(analyses);
     const circularDependencies = this.countCircularDependencies();
-    
+
     return {
       totalFiles,
       totalLines,
@@ -206,12 +234,12 @@ export class GhostDeveloper {
    */
   private findUnusedExports(analyses: FileAnalysis[]): GhostSuggestion[] {
     const suggestions: GhostSuggestion[] = [];
-    
+
     if (!this.dependencyGraph) return suggestions;
-    
+
     // Build a map of all imported symbols
     const importedSymbols = new Set<string>();
-    
+
     analyses.forEach(analysis => {
       analysis.imports.forEach(imp => {
         imp.importedSymbols.forEach(symbol => {
@@ -219,13 +247,13 @@ export class GhostDeveloper {
         });
       });
     });
-    
+
     // Find exported symbols that are never imported
     analyses.forEach(analysis => {
-      const unusedExports = analysis.symbols.filter(symbol => 
+      const unusedExports = analysis.symbols.filter(symbol =>
         symbol.isExported && !importedSymbols.has(symbol.name)
       );
-      
+
       if (unusedExports.length > 0) {
         suggestions.push({
           id: `unused-exports-${analysis.filePath}`,
@@ -240,7 +268,7 @@ export class GhostDeveloper {
         });
       }
     });
-    
+
     return suggestions;
   }
 
@@ -249,10 +277,10 @@ export class GhostDeveloper {
    */
   private findHighComplexityCode(analyses: FileAnalysis[]): GhostSuggestion[] {
     const suggestions: GhostSuggestion[] = [];
-    
+
     analyses.forEach(analysis => {
       const metrics = getComplexityMetrics(analysis);
-      
+
       if (metrics.averageComplexity > 10) {
         suggestions.push({
           id: `high-complexity-${analysis.filePath}`,
@@ -266,7 +294,7 @@ export class GhostDeveloper {
           priority: 8
         });
       }
-      
+
       // Check individual symbols
       metrics.highComplexitySymbols.forEach(symbol => {
         if (symbol.kind === 'function' || symbol.kind === 'class') {
@@ -285,7 +313,7 @@ export class GhostDeveloper {
         }
       });
     });
-    
+
     return suggestions;
   }
 
@@ -294,19 +322,19 @@ export class GhostDeveloper {
    */
   private findMissingErrorHandling(fileIndex: FileIndex[]): GhostSuggestion[] {
     const suggestions: GhostSuggestion[] = [];
-    
+
     fileIndex.forEach(file => {
       if (!/\.(ts|tsx|js|jsx)$/.test(file.path)) return;
-      
+
       const content = file.content;
-      
+
       // Check for async functions without try-catch
       const asyncFunctionRegex = /async\s+function\s+\w+|async\s+\(/g;
       const asyncMatches = content.match(asyncFunctionRegex);
-      
+
       if (asyncMatches && asyncMatches.length > 0) {
         const hasTryCatch = content.includes('try') && content.includes('catch');
-        
+
         if (!hasTryCatch) {
           suggestions.push({
             id: `missing-error-handling-${file.path}`,
@@ -322,7 +350,7 @@ export class GhostDeveloper {
         }
       }
     });
-    
+
     return suggestions;
   }
 
@@ -331,11 +359,11 @@ export class GhostDeveloper {
    */
   private findConsoleStatements(fileIndex: FileIndex[]): GhostSuggestion[] {
     const suggestions: GhostSuggestion[] = [];
-    
-    const filesWithConsole = fileIndex.filter(f => 
+
+    const filesWithConsole = fileIndex.filter(f =>
       /\.(ts|tsx|js|jsx)$/.test(f.path) && f.content.includes('console.')
     );
-    
+
     if (filesWithConsole.length > 5) {
       suggestions.push({
         id: 'console-statements',
@@ -349,7 +377,7 @@ export class GhostDeveloper {
         priority: 5
       });
     }
-    
+
     return suggestions;
   }
 
@@ -358,9 +386,9 @@ export class GhostDeveloper {
    */
   private findLargeFiles(analyses: FileAnalysis[]): GhostSuggestion[] {
     const suggestions: GhostSuggestion[] = [];
-    
+
     const largeFiles = analyses.filter(a => a.linesOfCode > 500);
-    
+
     largeFiles.forEach(analysis => {
       suggestions.push({
         id: `large-file-${analysis.filePath}`,
@@ -374,7 +402,7 @@ export class GhostDeveloper {
         priority: 4
       });
     });
-    
+
     return suggestions;
   }
 
@@ -383,10 +411,10 @@ export class GhostDeveloper {
    */
   private findDuplicatePatterns(analyses: FileAnalysis[]): GhostSuggestion[] {
     const suggestions: GhostSuggestion[] = [];
-    
+
     // Simple duplicate detection: same function signatures
     const signatureMap = new Map<string, Symbol[]>();
-    
+
     analyses.forEach(analysis => {
       analysis.symbols.forEach(symbol => {
         if (symbol.signature) {
@@ -396,7 +424,7 @@ export class GhostDeveloper {
         }
       });
     });
-    
+
     // Find duplicates
     signatureMap.forEach((symbols, signature) => {
       if (symbols.length > 1) {
@@ -414,7 +442,7 @@ export class GhostDeveloper {
         });
       }
     });
-    
+
     return suggestions;
   }
 
@@ -423,18 +451,18 @@ export class GhostDeveloper {
    */
   private detectCircularDependencies(): ArchitectureInsight[] {
     const insights: ArchitectureInsight[] = [];
-    
+
     if (!this.dependencyGraph) return insights;
-    
+
     const visited = new Set<string>();
     const recursionStack = new Set<string>();
     const cycles: string[][] = [];
-    
+
     const dfs = (node: string, path: string[]): void => {
       visited.add(node);
       recursionStack.add(node);
       path.push(node);
-      
+
       const analysis = this.dependencyGraph!.nodes.get(node);
       if (analysis) {
         analysis.dependencies.forEach(dep => {
@@ -449,17 +477,17 @@ export class GhostDeveloper {
           }
         });
       }
-      
+
       recursionStack.delete(node);
     };
-    
+
     // Check all nodes
     this.dependencyGraph.nodes.forEach((_, node) => {
       if (!visited.has(node)) {
         dfs(node, []);
       }
     });
-    
+
     // Create insights for cycles
     cycles.forEach((cycle) => {
       insights.push({
@@ -471,7 +499,7 @@ export class GhostDeveloper {
         recommendation: 'Dependency injection veya interface segregation kullanarak döngüyü kırın.'
       });
     });
-    
+
     return insights;
   }
 
@@ -480,16 +508,16 @@ export class GhostDeveloper {
    */
   private detectGodClasses(analyses: FileAnalysis[]): ArchitectureInsight[] {
     const insights: ArchitectureInsight[] = [];
-    
+
     analyses.forEach(analysis => {
       const classes = analysis.symbols.filter(s => s.kind === 'class');
-      
+
       classes.forEach(classSymbol => {
         // Count methods in class (rough estimate)
-        const methodCount = analysis.symbols.filter(s => 
+        const methodCount = analysis.symbols.filter(s =>
           s.kind === 'function' && s.filePath === classSymbol.filePath
         ).length;
-        
+
         if (methodCount > 20) {
           insights.push({
             type: 'god-class',
@@ -502,7 +530,7 @@ export class GhostDeveloper {
         }
       });
     });
-    
+
     return insights;
   }
 
@@ -511,16 +539,16 @@ export class GhostDeveloper {
    */
   private detectDeadCode(analyses: FileAnalysis[]): ArchitectureInsight[] {
     const insights: ArchitectureInsight[] = [];
-    
+
     if (!this.dependencyGraph) return insights;
-    
+
     // Find files with no dependents (not imported by anyone)
-    const deadFiles = analyses.filter(analysis => 
-      analysis.dependents.length === 0 && 
+    const deadFiles = analyses.filter(analysis =>
+      analysis.dependents.length === 0 &&
       !analysis.filePath.includes('main.') && // Exclude entry points
       !analysis.filePath.includes('index.')
     );
-    
+
     if (deadFiles.length > 0) {
       insights.push({
         type: 'dead-code',
@@ -531,7 +559,7 @@ export class GhostDeveloper {
         recommendation: 'Kullanılmayan dosyaları silin veya kullanmaya başlayın.'
       });
     }
-    
+
     return insights;
   }
 
@@ -540,7 +568,7 @@ export class GhostDeveloper {
    */
   private countUnusedExports(analyses: FileAnalysis[]): number {
     const importedSymbols = new Set<string>();
-    
+
     analyses.forEach(analysis => {
       analysis.imports.forEach(imp => {
         imp.importedSymbols.forEach(symbol => {
@@ -548,9 +576,9 @@ export class GhostDeveloper {
         });
       });
     });
-    
+
     let count = 0;
-    
+
     analyses.forEach(analysis => {
       analysis.symbols.forEach(symbol => {
         if (symbol.isExported && !importedSymbols.has(symbol.name)) {
@@ -558,7 +586,7 @@ export class GhostDeveloper {
         }
       });
     });
-    
+
     return count;
   }
 
@@ -567,15 +595,15 @@ export class GhostDeveloper {
    */
   private countCircularDependencies(): number {
     if (!this.dependencyGraph) return 0;
-    
+
     const visited = new Set<string>();
     const recursionStack = new Set<string>();
     let cycleCount = 0;
-    
+
     const dfs = (node: string): void => {
       visited.add(node);
       recursionStack.add(node);
-      
+
       const analysis = this.dependencyGraph!.nodes.get(node);
       if (analysis) {
         analysis.dependencies.forEach(dep => {
@@ -586,17 +614,52 @@ export class GhostDeveloper {
           }
         });
       }
-      
+
       recursionStack.delete(node);
     };
-    
+
     this.dependencyGraph.nodes.forEach((_, node) => {
       if (!visited.has(node)) {
         dfs(node);
       }
     });
-    
+
     return cycleCount;
+  }
+
+  /**
+   * 🕸️ Get dependency graph for visualization
+   */
+  getDependencyGraph() {
+    if (!this.dependencyGraph) return { nodes: [], links: [] };
+
+    const nodes: { id: string; name: string; val: number }[] = [];
+    const links: { source: string; target: string }[] = [];
+
+    // Add nodes
+    this.dependencyGraph.nodes.forEach((analysis, path) => {
+      nodes.push({
+        id: path,
+        name: path.split('/').pop() || path,
+        val: analysis.linesOfCode / 100 + 1 // Satır sayısına göre boyut
+      });
+
+      // Add edges (links)
+      analysis.dependencies.forEach(dep => {
+        // Not: resolvePath semanticBrain'den alınabilir veya burada basitçe yapılabilir
+        // dependencyGraph zaten çözülmüş yolları içerdiği varsayılıyor (buildDependencyGraph'a bak)
+        // Nodes map'inde anahtar olarak tam yol kullanılıyor.
+
+        // buildDependencyGraph içerisinde resolvedPath kullanılıyor.
+        // Biz burada sadece mevcut düğümleri kontrol ediyoruz.
+        links.push({
+          source: path,
+          target: dep // buildDependencyGraph'ta dep resolution yapılmış olmalı
+        });
+      });
+    });
+
+    return { nodes, links };
   }
 
   /**

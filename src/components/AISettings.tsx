@@ -1,10 +1,10 @@
 import { useState, useEffect } from "react";
 import GGUFModelBrowser from "./GGUFModelBrowser"; // Eski çalışan browser
-import { 
-  getAutonomyConfig, 
-  saveAutonomyConfig, 
+import {
+  getAutonomyConfig,
+  saveAutonomyConfig,
   getAutonomyLevelDescription,
-  type AutonomyLevel 
+  type AutonomyLevel
 } from "../services/autonomy";
 
 interface AIProvider {
@@ -115,7 +115,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
   const [autonomyLevel, setAutonomyLevel] = useState<AutonomyLevel>(3);
   const [editingProvider, setEditingProvider] = useState<string | null>(null);
   const [editForm, setEditForm] = useState<Partial<AIProvider>>({});
-  
+
   // Yeni provider ekleme formu
   const [newProvider, setNewProvider] = useState<Partial<AIProvider>>({
     name: '',
@@ -147,7 +147,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
     if (savedProviders) {
       try {
         const parsed = JSON.parse(savedProviders);
-        
+
         // GGUF provider yoksa ekle (backward compatibility)
         const hasGguf = parsed.some((p: AIProvider) => p.id === 'gguf-direct');
         if (!hasGguf) {
@@ -157,13 +157,13 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
             localStorage.setItem('corex-ai-providers', JSON.stringify(parsed));
           }
         }
-        
+
         setProviders(parsed);
       } catch (error) {
         console.error('AI providers yüklenemedi:', error);
       }
     }
-    
+
     // Load autonomy config
     const config = getAutonomyConfig();
     setAutonomyLevel(config.level);
@@ -175,12 +175,12 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
     setProviders(newProviders);
     localStorage.setItem('corex-ai-providers', JSON.stringify(newProviders));
     onProviderChange?.(newProviders);
-    
+
     // Custom event gönder
-    window.dispatchEvent(new CustomEvent('ai-providers-updated', { 
-      detail: newProviders 
+    window.dispatchEvent(new CustomEvent('ai-providers-updated', {
+      detail: newProviders
     }));
-    
+
     console.log('📡 Provider güncelleme eventi gönderildi');
   };
 
@@ -199,7 +199,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
     if (!editingProvider) {
       return;
     }
-    
+
     if (editForm.id !== 'gguf-direct' && (!editForm.host || !editForm.port)) {
       alert('Host ve Port alanları zorunludur!');
       return;
@@ -209,21 +209,21 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
     const cleanHost = editForm.host?.replace(/^https?:\/\//, '') || '';
     const baseUrl = `http://${cleanHost}:${editForm.port}/v1`;
 
-    const newProviders = providers.map(p => 
-      p.id === editingProvider 
+    const newProviders = providers.map(p =>
+      p.id === editingProvider
         ? {
-            ...p,
-            ...editForm,
-            host: cleanHost,
-            baseUrl: baseUrl
-          }
+          ...p,
+          ...editForm,
+          host: cleanHost,
+          baseUrl: baseUrl
+        }
         : p
     );
-    
+
     saveProviders(newProviders);
     setEditingProvider(null);
     setEditForm({});
-    
+
     // Otomatik bağlantı testi
     const updatedProvider = newProviders.find(p => p.id === editingProvider);
     if (updatedProvider) {
@@ -240,21 +240,21 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
   // Provider bağlantı testi
   const testConnection = async (provider: AIProvider) => {
     setConnectionStatus(prev => ({ ...prev, [provider.id]: 'checking' }));
-    
+
     try {
       console.log('🔍 Bağlantı test ediliyor:', provider.baseUrl);
-      
+
       // aiProvider.ts'teki test fonksiyonunu kullan
       const { testProviderConnection } = await import('../services/aiProvider');
       const isConnected = await testProviderConnection(provider);
-      
+
       if (isConnected) {
         setConnectionStatus(prev => ({ ...prev, [provider.id]: 'connected' }));
         console.log('✅ Bağlantı başarılı:', provider.name);
       } else {
         throw new Error('Bağlantı başarısız');
       }
-      
+
     } catch (error) {
       console.error('❌ Bağlantı hatası:', error);
       setConnectionStatus(prev => ({ ...prev, [provider.id]: 'error' }));
@@ -263,7 +263,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
 
   // Provider'ı aktif/pasif yap
   const toggleProvider = (providerId: string) => {
-    const newProviders = providers.map(p => 
+    const newProviders = providers.map(p =>
       p.id === providerId ? { ...p, isActive: !p.isActive } : p
     );
     saveProviders(newProviders);
@@ -271,14 +271,14 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
 
   // Model'i aktif/pasif yap
   const toggleModel = (providerId: string, modelId: string) => {
-    const newProviders = providers.map(p => 
-      p.id === providerId 
+    const newProviders = providers.map(p =>
+      p.id === providerId
         ? {
-            ...p,
-            models: p.models.map(m => 
-              m.id === modelId ? { ...m, isActive: !m.isActive } : m
-            )
-          }
+          ...p,
+          models: p.models.map(m =>
+            m.id === modelId ? { ...m, isActive: !m.isActive } : m
+          )
+        }
         : p
     );
     saveProviders(newProviders);
@@ -314,7 +314,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
     };
 
     saveProviders([...providers, provider]);
-    
+
     // Formu temizle
     setNewProvider({
       name: '',
@@ -328,9 +328,9 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
       models: [],
       isActive: false
     });
-    
+
     setActiveTab('providers');
-    
+
     // Otomatik test
     setTimeout(() => testConnection(provider), 500);
   };
@@ -353,14 +353,14 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
       isActive: true
     };
 
-    const newProviders = providers.map(p => 
-      p.id === selectedProvider 
+    const newProviders = providers.map(p =>
+      p.id === selectedProvider
         ? { ...p, models: [...p.models, model] }
         : p
     );
-    
+
     saveProviders(newProviders);
-    
+
     // Formu temizle
     setNewModel({
       name: '',
@@ -391,16 +391,16 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
 
     try {
       console.log('🔍 Modeller getiriliyor:', provider.name);
-      
+
       const { fetchAvailableModels } = await import('../services/aiProvider');
       const modelNames = await fetchAvailableModels(provider);
-      
+
       console.log('📥 Alınan modeller:', modelNames);
-      
+
       if (modelNames.length > 0) {
         // Kullanıcıya modelleri göster ve seçim yaptır
         const selectedModels = modelNames.slice(0, 10); // İlk 10 modeli al
-        
+
         const newModels = selectedModels.map((modelName, index) => {
           return {
             id: `fetched-${Date.now()}-${index}`,
@@ -414,33 +414,33 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
           };
         });
 
-        const newProviders = providers.map(p => 
-          p.id === providerId 
+        const newProviders = providers.map(p =>
+          p.id === providerId
             ? { ...p, models: [...p.models, ...newModels] }
             : p
         );
-        
+
         saveProviders(newProviders);
-        
+
         // Başarı mesajı - popup yerine console
         console.log(`✅ ${newModels.length} model başarıyla eklendi!`);
         console.log('📋 Eklenen modeller:', newModels.map(m => m.displayName));
-        
+
         // Kullanıcıya kısa bildirim
         alert(`✅ ${newModels.length} model eklendi!\n\n${newModels.map(m => `• ${m.displayName}`).join('\n')}`);
-        
+
         // Model seçiciyi güncelle
-        window.dispatchEvent(new CustomEvent('ai-providers-updated', { 
-          detail: newProviders 
+        window.dispatchEvent(new CustomEvent('ai-providers-updated', {
+          detail: newProviders
         }));
       } else {
         alert('⚠️ Bu provider\'dan model listesi boş geldi. Sunucunun çalıştığından ve modellerin yüklendiğinden emin olun.');
       }
     } catch (error) {
       console.error('❌ Model getirme hatası:', error);
-      
+
       let errorMessage = 'Model listesi alınırken hata oluştu:\n\n';
-      
+
       if (error instanceof Error) {
         if (error.message.includes('fetch')) {
           errorMessage += '🔌 Bağlantı hatası: AI sunucusuna erişilemiyor.\n';
@@ -461,7 +461,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
       } else {
         errorMessage += '❌ Bilinmeyen hata oluştu';
       }
-      
+
       alert(errorMessage);
     }
   };
@@ -469,8 +469,8 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
   // Model sil
   const deleteModel = (providerId: string, modelId: string) => {
     if (confirm('Bu modeli silmek istediğinizden emin misiniz?')) {
-      const newProviders = providers.map(p => 
-        p.id === providerId 
+      const newProviders = providers.map(p =>
+        p.id === providerId
           ? { ...p, models: p.models.filter(m => m.id !== modelId) }
           : p
       );
@@ -504,15 +504,15 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-      <div 
-        className="w-full max-w-4xl h-[85vh] bg-[#1e1e1e] rounded-xl border border-neutral-800 flex flex-col"
+      <div
+        className="w-full max-w-4xl h-[85vh] bg-[var(--color-background)] rounded-xl border border-[var(--color-border)] flex flex-col shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-3 py-2 border-b border-neutral-800">
+        <div className="flex items-center justify-between px-3 py-2 border-b border-[var(--color-border)]">
           <div className="flex items-center gap-2">
             <span className="text-xl">🤖</span>
-            <h2 className="text-lg font-semibold text-white">AI Ayarları</h2>
+            <h2 className="text-lg font-semibold text-[var(--color-text)]">AI Ayarları</h2>
           </div>
           <button
             onClick={onClose}
@@ -525,7 +525,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
         </div>
 
         {/* Tabs */}
-        <div className="flex border-b border-neutral-800">
+        <div className="flex border-b border-[var(--color-border)]">
           {[
             { id: 'providers', label: 'AI Sağlayıcıları', icon: '🏢' },
             { id: 'models', label: 'Modeller', icon: '🧠' },
@@ -535,11 +535,10 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id as any)}
-              className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${
-                activeTab === tab.id
-                  ? 'text-blue-400 border-b-2 border-blue-400 bg-blue-500/10'
-                  : 'text-neutral-400 hover:text-neutral-300'
-              }`}
+              className={`px-3 py-2 text-xs font-medium transition-colors flex items-center gap-1.5 ${activeTab === tab.id
+                ? "text-[var(--color-primary)] border-b-2 border-[var(--color-primary)] bg-[var(--color-primary)]/5"
+                : "text-[var(--color-textSecondary)] hover:text-[var(--color-text)]"
+                }`}
             >
               <span className="text-sm">{tab.icon}</span>
               {tab.label}
@@ -552,7 +551,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
           {activeTab === 'providers' && (
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <h3 className="text-base font-semibold text-white">AI Sağlayıcıları</h3>
+                <h3 className="text-base font-semibold text-[var(--color-text)]">AI Sağlayıcıları</h3>
                 <button
                   onClick={() => providers.forEach(testConnection)}
                   className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs transition-colors"
@@ -560,28 +559,27 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                   Tümünü Test Et
                 </button>
               </div>
-              
+
               <div className="grid gap-3">
                 {providers.map((provider) => (
                   <div
                     key={provider.id}
-                    className={`p-3 rounded-lg border transition-colors ${
-                      provider.isActive
-                        ? 'border-green-500/30 bg-green-500/5'
-                        : 'border-neutral-700 bg-neutral-800/30'
-                    }`}
+                    className={`p-3 rounded-lg border transition-colors ${provider.isActive
+                      ? 'border-[var(--color-primary)]/30 bg-[var(--color-primary)]/5'
+                      : 'border-[var(--color-border)] bg-[var(--color-surface)] shadow-sm'
+                      }`}
                   >
                     {editingProvider === provider.id ? (
                       // Düzenleme modu
                       <div className="space-y-3">
                         <div className="flex items-center gap-2 mb-2">
                           <span className="text-xl">{provider.icon}</span>
-                          <h4 className="text-white font-medium text-sm">{provider.name}</h4>
+                          <h4 className="text-[var(--color-text)] font-medium text-sm">{provider.name}</h4>
                           <span className="text-xs px-1.5 py-0.5 bg-blue-600 text-white rounded">
                             Düzenleniyor
                           </span>
                         </div>
-                        
+
                         <div className="grid grid-cols-2 gap-3">
                           {/* GGUF için Host/Port gizle */}
                           {editForm.id !== 'gguf-direct' && (
@@ -598,10 +596,10 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                                     setEditForm(prev => ({ ...prev, host: cleanHost }));
                                   }}
                                   placeholder="127.0.0.1 (sadece IP, port ayrı)"
-                                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                                  className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                                 />
                               </div>
-                              
+
                               <div>
                                 <label className="block text-sm font-medium text-neutral-300 mb-1">
                                   Port
@@ -611,12 +609,12 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                                   value={editForm.port || ''}
                                   onChange={(e) => setEditForm(prev => ({ ...prev, port: parseInt(e.target.value) || undefined }))}
                                   placeholder="1234"
-                                  className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                                  className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                                 />
                               </div>
                             </>
                           )}
-                          
+
                           <div className="col-span-2">
                             <label className="block text-sm font-medium text-neutral-300 mb-1">
                               Açıklama
@@ -626,11 +624,11 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                               value={editForm.description || ''}
                               onChange={(e) => setEditForm(prev => ({ ...prev, description: e.target.value }))}
                               placeholder="AI sunucusu açıklaması"
-                              className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                              className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                             />
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-2 pt-2">
                           <button
                             onClick={saveEditProvider}
@@ -656,7 +654,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                           <span className="text-2xl">{provider.icon}</span>
                           <div>
                             <div className="flex items-center gap-2 mb-1">
-                              <h4 className="text-white font-medium">{provider.name}</h4>
+                              <h4 className="text-[var(--color-text)] font-medium">{provider.name}</h4>
                               <span className={`text-sm ${getStatusColor(connectionStatus[provider.id])}`}>
                                 {getStatusIcon(connectionStatus[provider.id])}
                               </span>
@@ -678,11 +676,11 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                             </div>
                           </div>
                         </div>
-                        
+
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => testConnection(provider)}
-                            className="px-2 py-1 bg-neutral-700 hover:bg-neutral-600 text-white rounded text-xs transition-colors"
+                            className="px-2 py-1 bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text)] rounded text-xs transition-colors"
                             disabled={connectionStatus[provider.id] === 'checking'}
                           >
                             {connectionStatus[provider.id] === 'checking' ? '⏳' : '🔄'} Test
@@ -695,11 +693,10 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                           </button>
                           <button
                             onClick={() => toggleProvider(provider.id)}
-                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${
-                              provider.isActive
-                                ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/25'
-                                : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/25'
-                            }`}
+                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 ${provider.isActive
+                              ? 'bg-green-600 hover:bg-green-700 text-white shadow-lg shadow-green-500/25'
+                              : 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/25'
+                              }`}
                           >
                             {provider.isActive ? (
                               <span className="flex items-center gap-2">
@@ -738,12 +735,12 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                 return null;
               })()}
               <div className="flex items-center justify-between">
-                <h3 className="text-lg font-semibold text-white">AI Modelleri</h3>
+                <h3 className="text-lg font-semibold text-[var(--color-text)]">AI Modelleri</h3>
                 <div className="flex items-center gap-2">
                   <select
                     value={selectedProvider}
                     onChange={(e) => setSelectedProvider(e.target.value)}
-                    className="px-3 py-1.5 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                    className="px-3 py-1.5 bg-[var(--color-background)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                   >
                     {providers.map((provider) => (
                       <option key={provider.id} value={provider.id}>
@@ -767,24 +764,24 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                 <div className="mb-4">
                   <GGUFModelBrowser
                     onModelSelect={(model) => {
-                      const newProviders = providers.map(p => 
+                      const newProviders = providers.map(p =>
                         p.id === 'gguf-direct'
                           ? {
-                              ...p,
-                              models: [
-                                ...p.models.filter(m => m.id !== model.id),
-                                {
-                                  id: model.id,
-                                  name: model.name,
-                                  displayName: model.displayName,
-                                  description: model.description,
-                                  specialty: model.quantization,
-                                  maxTokens: 4096,
-                                  temperature: 0.7,
-                                  isActive: true
-                                }
-                              ]
-                            }
+                            ...p,
+                            models: [
+                              ...p.models.filter(m => m.id !== model.id),
+                              {
+                                id: model.id,
+                                name: model.name,
+                                displayName: model.displayName,
+                                description: model.description,
+                                specialty: model.quantization,
+                                maxTokens: 4096,
+                                temperature: 0.7,
+                                isActive: true
+                              }
+                            ]
+                          }
                           : p
                       );
                       saveProviders(newProviders);
@@ -792,38 +789,37 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                   />
                 </div>
               )}
-              
+
               {selectedProvider !== 'gguf-direct' && (
                 providers.find(p => p.id === selectedProvider)?.models.map((model) => (
-                <div
-                  key={model.id}
-                  className={`p-2 rounded-lg border transition-colors ${
-                    model.isActive
+                  <div
+                    key={model.id}
+                    className={`p-2 rounded-lg border transition-colors ${model.isActive
                       ? 'border-blue-500/30 bg-blue-500/5'
                       : 'border-neutral-700 bg-neutral-800/30'
-                  }`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <div className="flex items-center gap-2 mb-1">
-                        <h4 className="text-white font-medium">{model.displayName}</h4>
-                        <span className="text-xs px-2 py-0.5 bg-neutral-700 text-neutral-300 rounded">
-                          {model.specialty}
-                        </span>
-                      </div>
-                      <p className="text-sm text-neutral-400 mb-2">{model.description}</p>
-                      <div className="flex items-center gap-2 text-xs text-neutral-500">
-                        <span>Model: {model.name}</span>
-                        <div className="flex items-center gap-2">
-                          <span>Max Tokens:</span>
-                          <input
-                            type="number"
-                            value={model.maxTokens || 4096}
-                            onChange={(e) => {
-                              const newValue = parseInt(e.target.value) || 4096;
-                              const newProviders = providers.map(p =>
-                                p.id === selectedProvider
-                                  ? {
+                      }`}
+                  >
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <h4 className="text-[var(--color-text)] font-medium">{model.displayName}</h4>
+                          <span className="text-xs px-2 py-0.5 bg-[var(--color-background)] text-[var(--color-textSecondary)] border border-[var(--color-border)] rounded">
+                            {model.specialty}
+                          </span>
+                        </div>
+                        <p className="text-sm text-neutral-400 mb-2">{model.description}</p>
+                        <div className="flex items-center gap-2 text-xs text-neutral-500">
+                          <span>Model: {model.name}</span>
+                          <div className="flex items-center gap-2">
+                            <span>Max Tokens:</span>
+                            <input
+                              type="number"
+                              value={model.maxTokens || 4096}
+                              onChange={(e) => {
+                                const newValue = parseInt(e.target.value) || 4096;
+                                const newProviders = providers.map(p =>
+                                  p.id === selectedProvider
+                                    ? {
                                       ...p,
                                       models: p.models.map(m =>
                                         m.id === model.id
@@ -831,42 +827,41 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                                           : m
                                       )
                                     }
-                                  : p
-                              );
-                              saveProviders(newProviders);
-                              console.log(`✅ ${model.displayName} maxTokens güncellendi:`, newValue);
-                            }}
-                            min="512"
-                            max="128000"
-                            step="512"
-                            className="w-24 px-2 py-1 bg-neutral-700 border border-neutral-600 rounded text-white text-xs"
-                          />
+                                    : p
+                                );
+                                saveProviders(newProviders);
+                                console.log(`✅ ${model.displayName} maxTokens güncellendi:`, newValue);
+                              }}
+                              min="512"
+                              max="128000"
+                              step="512"
+                              className="w-24 px-2 py-1 bg-[var(--color-surface)] border border-[var(--color-border)] rounded text-[var(--color-text)] text-xs"
+                            />
+                          </div>
+                          <span>Temperature: {model.temperature}</span>
                         </div>
-                        <span>Temperature: {model.temperature}</span>
                       </div>
-                    </div>
-                    
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => toggleModel(selectedProvider, model.id)}
-                        className={`px-3 py-1 rounded text-xs transition-colors ${
-                          model.isActive
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => toggleModel(selectedProvider, model.id)}
+                          className={`px-3 py-1 rounded text-xs transition-colors ${model.isActive
                             ? 'bg-blue-600 hover:bg-blue-700 text-white'
                             : 'bg-neutral-600 hover:bg-neutral-700 text-white'
-                        }`}
-                      >
-                        {model.isActive ? 'Aktif' : 'Pasif'}
-                      </button>
-                      <button
-                        onClick={() => deleteModel(selectedProvider, model.id)}
-                        className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs transition-colors"
-                      >
-                        Sil
-                      </button>
+                            }`}
+                        >
+                          {model.isActive ? 'Aktif' : 'Pasif'}
+                        </button>
+                        <button
+                          onClick={() => deleteModel(selectedProvider, model.id)}
+                          className="px-2 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-xs transition-colors"
+                        >
+                          Sil
+                        </button>
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))
+                ))
               )}
             </div>
           )}
@@ -874,18 +869,18 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
           {activeTab === 'autonomy' && (
             <div className="space-y-3">
               <div>
-                <h3 className="text-lg font-semibold text-white mb-2">🎚️ Otomasyon Seviyesi</h3>
-                <p className="text-sm text-neutral-400 mb-2">
+                <h3 className="text-lg font-semibold text-[var(--color-text)] mb-2">🎚️ Otomasyon Seviyesi</h3>
+                <p className="text-sm text-[var(--color-textSecondary)] mb-2">
                   AI'nın tool'ları ne kadar özgürce kullanabileceğini belirleyin
                 </p>
               </div>
 
               {/* Autonomy Level Slider */}
-              <div className="bg-[#252525] rounded-lg p-6 border border-neutral-800">
+              <div className="bg-[var(--color-surface)] rounded-lg p-6 border border-[var(--color-border)]">
                 <div className="mb-6">
                   <div className="flex items-center justify-between mb-2">
-                    <span className="text-sm font-medium text-white">Seviye {autonomyLevel}</span>
-                    <span className="text-xs text-neutral-400">{getAutonomyLevelDescription(autonomyLevel)}</span>
+                    <span className="text-sm font-medium text-[var(--color-text)]">Seviye {autonomyLevel}</span>
+                    <span className="text-xs text-[var(--color-textSecondary)]">{getAutonomyLevelDescription(autonomyLevel)}</span>
                   </div>
                   <input
                     type="range"
@@ -897,7 +892,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       setAutonomyLevel(newLevel);
                       saveAutonomyConfig({ level: newLevel });
                     }}
-                    className="w-full h-2 bg-neutral-700 rounded-lg appearance-none cursor-pointer slider"
+                    className="w-full h-2 bg-[var(--color-background)] rounded-lg appearance-none cursor-pointer slider border border-[var(--color-border)]"
                   />
                   <div className="flex justify-between text-xs text-neutral-500 mt-1">
                     <span>1</span>
@@ -919,15 +914,14 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                   ].map((item) => (
                     <div
                       key={item.level}
-                      className={`p-3 rounded-lg border transition-colors ${
-                        autonomyLevel === item.level
-                          ? 'bg-blue-500/10 border-blue-500/50'
-                          : 'bg-neutral-800/50 border-neutral-700'
-                      }`}
+                      className={`p-3 rounded-lg border transition-colors ${autonomyLevel === item.level
+                        ? 'bg-[var(--color-primary)]/10 border-[var(--color-primary)]'
+                        : 'bg-[var(--color-background)] border-[var(--color-border)]'
+                        }`}
                     >
                       <div className="flex items-center gap-2 mb-1">
                         <span className="text-lg">{item.icon}</span>
-                        <span className="text-sm font-medium text-white">{item.title}</span>
+                        <span className="text-sm font-medium text-[var(--color-text)]">{item.title}</span>
                         {item.level === 3 && (
                           <span className="px-2 py-0.5 bg-green-500/20 text-green-400 text-xs rounded">Önerilen</span>
                         )}
@@ -939,8 +933,8 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
               </div>
 
               {/* Safe Tools */}
-              <div className="bg-[#252525] rounded-lg p-2 border border-neutral-800">
-                <h4 className="text-sm font-semibold text-white mb-3">✅ Güvenli Tool'lar (Her zaman otomatik)</h4>
+              <div className="bg-[var(--color-surface)] rounded-lg p-2 border border-[var(--color-border)]">
+                <h4 className="text-sm font-semibold text-[var(--color-text)] mb-3">✅ Güvenli Tool'lar (Her zaman otomatik)</h4>
                 <div className="flex flex-wrap gap-2">
                   {['read_file', 'list_files', 'plan_task', 'generate_code'].map((tool) => (
                     <span key={tool} className="px-3 py-1 bg-green-500/10 text-green-400 text-xs rounded-full border border-green-500/30">
@@ -954,8 +948,8 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
               </div>
 
               {/* Dangerous Commands */}
-              <div className="bg-[#252525] rounded-lg p-2 border border-neutral-800">
-                <h4 className="text-sm font-semibold text-white mb-3">⚠️ Tehlikeli Komutlar (Her zaman onay gerektirir)</h4>
+              <div className="bg-[var(--color-surface)] rounded-lg p-2 border border-[var(--color-border)]">
+                <h4 className="text-sm font-semibold text-[var(--color-text)] mb-3">⚠️ Tehlikeli Komutlar (Her zaman onay gerektirir)</h4>
                 <div className="flex flex-wrap gap-2">
                   {['rm', 'del', 'format', 'DROP TABLE', 'shutdown'].map((cmd) => (
                     <span key={cmd} className="px-3 py-1 bg-red-500/10 text-red-400 text-xs rounded-full border border-red-500/30 font-mono">
@@ -967,12 +961,12 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
 
               {/* Warning */}
               {autonomyLevel >= 4 && (
-                <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-lg p-4">
+                <div className="bg-blue-500/5 border border-blue-500/20 rounded-lg p-4">
                   <div className="flex items-start gap-3">
-                    <span className="text-2xl">⚠️</span>
+                    <span className="text-2xl">ℹ️</span>
                     <div>
-                      <h4 className="text-sm font-semibold text-yellow-400 mb-1">Dikkat!</h4>
-                      <p className="text-xs text-yellow-300/80">
+                      <h4 className="text-sm font-semibold text-[var(--color-primary)] mb-1">Dikkat!</h4>
+                      <p className="text-xs text-[var(--color-textSecondary)]">
                         Yüksek otomasyon seviyesi tehlikeli olabilir. AI terminal komutları ve dosya işlemlerini otomatik çalıştırabilir.
                         Sadece güvendiğiniz modeller için kullanın.
                       </p>
@@ -988,7 +982,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
               {/* Yeni Provider Ekleme */}
               <div className="p-2 border border-neutral-700 rounded-lg">
                 <h3 className="text-lg font-semibold text-white mb-2">Yeni AI Sağlayıcısı Ekle</h3>
-                
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
@@ -999,10 +993,10 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       value={newProvider.name || ''}
                       onChange={(e) => setNewProvider(prev => ({ ...prev, name: e.target.value }))}
                       placeholder="Örn: OpenAI, Claude, Custom AI"
-                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                      className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       Tür
@@ -1011,17 +1005,17 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       value={newProvider.type || 'local'}
                       onChange={(e) => {
                         const type = e.target.value as any;
-                        setNewProvider(prev => ({ 
-                          ...prev, 
+                        setNewProvider(prev => ({
+                          ...prev,
                           type,
                           // Tür değiştiğinde varsayılan değerleri ayarla
                           host: type === 'local' ? '127.0.0.1' : '',
                           port: type === 'local' ? (type === 'ollama' ? 11434 : 1234) : undefined,
-                          baseUrl: type === 'openai' ? 'https://api.openai.com/v1' : 
-                                  type === 'anthropic' ? 'https://api.anthropic.com/v1' : ''
+                          baseUrl: type === 'openai' ? 'https://api.openai.com/v1' :
+                            type === 'anthropic' ? 'https://api.anthropic.com/v1' : ''
                         }));
                       }}
-                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                      className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                     >
                       <option value="local">Local (LM Studio/Ollama)</option>
                       <option value="openai">OpenAI</option>
@@ -1029,7 +1023,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       <option value="custom">Custom</option>
                     </select>
                   </div>
-                  
+
                   {/* Host + Port (Local için) */}
                   {(newProvider.type === 'local' || newProvider.type === 'custom') && (
                     <>
@@ -1042,10 +1036,10 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                           value={newProvider.host || ''}
                           onChange={(e) => setNewProvider(prev => ({ ...prev, host: e.target.value }))}
                           placeholder="127.0.0.1 veya 192.168.1.100"
-                          className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                          className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                         />
                       </div>
-                      
+
                       <div>
                         <label className="block text-sm font-medium text-neutral-300 mb-1">
                           Port
@@ -1060,7 +1054,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       </div>
                     </>
                   )}
-                  
+
                   {/* Base URL (API servisleri için) */}
                   <div className={newProvider.type === 'local' ? 'col-span-2' : 'col-span-2'}>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
@@ -1072,17 +1066,16 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       onChange={(e) => setNewProvider(prev => ({ ...prev, baseUrl: e.target.value }))}
                       placeholder={
                         newProvider.type === 'openai' ? 'https://api.openai.com/v1' :
-                        newProvider.type === 'anthropic' ? 'https://api.anthropic.com/v1' :
-                        newProvider.type === 'local' ? 'http://127.0.0.1:1234/v1 (otomatik)' :
-                        'https://your-api.com/v1'
+                          newProvider.type === 'anthropic' ? 'https://api.anthropic.com/v1' :
+                            newProvider.type === 'local' ? 'http://127.0.0.1:1234/v1 (otomatik)' :
+                              'https://your-api.com/v1'
                       }
                       disabled={newProvider.type === 'local'}
-                      className={`w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm ${
-                        newProvider.type === 'local' ? 'opacity-50 cursor-not-allowed' : ''
-                      }`}
+                      className={`w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm ${newProvider.type === 'local' ? 'opacity-50 cursor-not-allowed' : ''
+                        }`}
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       API Key {newProvider.type === 'local' ? '(Opsiyonel)' : '(Gerekli)'}
@@ -1093,13 +1086,13 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       onChange={(e) => setNewProvider(prev => ({ ...prev, apiKey: e.target.value }))}
                       placeholder={
                         newProvider.type === 'openai' ? 'sk-...' :
-                        newProvider.type === 'anthropic' ? 'sk-ant-...' :
-                        'API anahtarı (varsa)'
+                          newProvider.type === 'anthropic' ? 'sk-ant-...' :
+                            'API anahtarı (varsa)'
                       }
-                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                      className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       İkon
@@ -1112,7 +1105,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
                     />
                   </div>
-                  
+
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       Açıklama
@@ -1126,7 +1119,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                     />
                   </div>
                 </div>
-                
+
                 <button
                   onClick={addProvider}
                   className="mt-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg transition-colors"
@@ -1138,7 +1131,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
               {/* Yeni Model Ekleme */}
               <div className="p-2 border border-neutral-700 rounded-lg">
                 <h3 className="text-lg font-semibold text-white mb-2">Yeni Model Ekle</h3>
-                
+
                 <div className="mb-2">
                   <label className="block text-sm font-medium text-neutral-300 mb-1">
                     Sağlayıcı Seç
@@ -1155,7 +1148,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                     ))}
                   </select>
                 </div>
-                
+
                 <div className="grid grid-cols-2 gap-2">
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
@@ -1169,7 +1162,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       Görünen Ad
@@ -1182,7 +1175,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       Uzmanlık Alanı
@@ -1195,7 +1188,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
                     />
                   </div>
-                  
+
                   <div>
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       Max Tokens
@@ -1207,7 +1200,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
                     />
                   </div>
-                  
+
                   <div className="col-span-2">
                     <label className="block text-sm font-medium text-neutral-300 mb-1">
                       Açıklama
@@ -1217,11 +1210,11 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
                       value={newModel.description || ''}
                       onChange={(e) => setNewModel(prev => ({ ...prev, description: e.target.value }))}
                       placeholder="Model açıklaması"
-                      className="w-full px-3 py-2 bg-neutral-800 border border-neutral-700 rounded-lg text-white text-sm"
+                      className="w-full px-3 py-2 bg-[var(--color-surface)] border border-[var(--color-border)] rounded-lg text-[var(--color-text)] text-sm"
                     />
                   </div>
                 </div>
-                
+
                 <button
                   onClick={addModel}
                   className="mt-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
@@ -1234,7 +1227,7 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
         </div>
 
         {/* Footer */}
-        <div className="p-2 border-t border-neutral-800">
+        <div className="p-2 border-t border-[var(--color-border)] bg-[var(--color-background)] rounded-b-xl">
           <div className="flex items-center justify-between">
             <div className="text-xs text-neutral-500">
               💡 Ayarlar otomatik kaydedilir • API anahtarları güvenli şekilde saklanır
@@ -1243,11 +1236,10 @@ export default function AISettings({ isVisible, onClose, onProviderChange }: AIS
               {/* Canlı bağlantı durumu */}
               <div className="flex items-center gap-2">
                 <div className="flex items-center gap-1">
-                  <div className={`w-2 h-2 rounded-full ${
-                    Object.values(connectionStatus).some(status => status === 'online') 
-                      ? 'bg-green-500 animate-pulse' 
-                      : 'bg-red-500'
-                  }`}></div>
+                  <div className={`w-2 h-2 rounded-full ${Object.values(connectionStatus).some(status => status === 'online')
+                    ? 'bg-green-500 animate-pulse'
+                    : 'bg-red-500'
+                    }`}></div>
                   <span className="text-xs text-neutral-400">
                     {Object.values(connectionStatus).filter(status => status === 'online').length} aktif bağlantı
                   </span>

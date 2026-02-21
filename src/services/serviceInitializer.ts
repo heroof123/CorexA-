@@ -4,6 +4,8 @@
 import { backgroundReasoner } from './backgroundReasoner';
 import { symbolSearch } from './symbolSearch';
 import { impactAnalysis } from './impactAnalysis';
+import { testWriterAgent } from './testAgent';
+import { invoke } from '@tauri-apps/api/core';
 
 /**
  * 🆕 TASK 22: Service Initialization and Wiring
@@ -35,7 +37,7 @@ export async function initializeServices(_projectPath: string): Promise<void> {
     // Subscribe to analysis completion events
     backgroundReasoner.on('analysis-complete', (data: any) => {
       console.log(`✅ Analysis complete for ${data.filePath}: ${data.insights.length} insights`);
-      
+
       // TASK 22.2: Wire EditorOverlay to BackgroundReasoner events
       // Update editor decorations when analysis completes
       // TODO: EditorOverlay needs to be initialized with Monaco editor instance
@@ -98,6 +100,11 @@ export function handleFileSave(filePath: string): void {
 
   // Queue high-priority analysis for saved file
   backgroundReasoner.queueAnalysis(filePath, 'high');
+
+  // 🧪 Triger Test Writer Agent
+  invoke<string>("read_file", { path: filePath })
+    .then(content => testWriterAgent.onFileSaved(filePath, content))
+    .catch(err => console.error("❌ Test agent file read error:", err));
 }
 
 /**
@@ -109,9 +116,9 @@ export function shutdownServices(): void {
   }
 
   console.log('🛑 Shutting down AI-native IDE services...');
-  
+
   backgroundReasoner.stop();
-  
+
   isInitialized = false;
   console.log('✅ Services shut down');
 }

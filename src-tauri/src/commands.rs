@@ -166,14 +166,16 @@ pub async fn chat_with_ai(message: String) -> Result<String, String> {
 
 #[tauri::command]
 pub async fn chat_with_specific_ai(message: String, model_type: String) -> Result<String, String> {
+    // Default to 1234 if not specified, but this function is legacy. 
+    // Use chat_with_dynamic_ai for modern usage.
     let (port, model_name) = match model_type.as_str() {
-        "main" => (1234, "qwen2.5-coder-7b-instruct"),     // Ana model (7B)
-        "chat" => (1234, "qwen2.5-3b-instruct"),           // Hızlı chat (3B)
-        "llama" => (1234, "meta-llama-3.1-8b-instruct"),   // Llama 3.1 8B
-        "planner" => (1234, "qwen2.5-coder-7b-instruct"),  // Planner = Ana model
-        "coder" => (1234, "qwen2.5-coder-7b-instruct"),    // Coder = Ana model
-        "tester" => (1234, "qwen2.5-3b-instruct"),         // Tester = Hızlı model
-        _ => (1234, "qwen2.5-coder-7b-instruct"),          // Default
+        "main" => (1234, "qwen2.5-coder-7b-instruct"),
+        "chat" => (1234, "qwen2.5-3b-instruct"),
+        "llama" => (1234, "meta-llama-3.1-8b-instruct"),
+        "planner" => (1234, "qwen2.5-coder-7b-instruct"),
+        "coder" => (1234, "qwen2.5-coder-7b-instruct"),
+        "tester" => (1234, "qwen2.5-3b-instruct"),
+        _ => (1234, "qwen2.5-coder-7b-instruct"),
     };
 
     info!("🔵 {}:{} modeline istek gönderiliyor...", model_type, port);
@@ -510,11 +512,12 @@ pub fn execute_terminal_command(command: String, path: String) -> Result<serde_j
 // BGE EMBEDDING API
 // --------------------
 #[tauri::command]
-pub async fn create_embedding_bge(text: String) -> Result<Vec<f32>, String> {
+pub async fn create_embedding_bge(text: String, endpoint: Option<String>) -> Result<Vec<f32>, String> {
     info!("🧩 BGE Embedding oluşturuluyor...");
     
     let client = Client::new();
-    let endpoint = "http://127.0.0.1:1234/v1/embeddings";
+    let final_endpoint = endpoint.unwrap_or_else(|| "http://127.0.0.1:1234/v1/embeddings".to_string());
+    info!("📡 Embedding endpoint: {}", final_endpoint);
 
     let body = json!({
         "model": "text-embedding-bge-base-en-v1.5",
@@ -523,7 +526,7 @@ pub async fn create_embedding_bge(text: String) -> Result<Vec<f32>, String> {
     });
 
     let res = client
-        .post(endpoint)
+        .post(&final_endpoint)
         .json(&body)
         .send()
         .await
@@ -1006,11 +1009,11 @@ pub async fn init_vector_db(db_path: String) -> Result<(), String> {
 
 /// Search vector database for similar code chunks
 #[tauri::command]
-pub async fn vector_search(query: String, top_k: u32) -> Result<Vec<CodeChunk>, String> {
+pub async fn vector_search(query: String, top_k: u32, endpoint: Option<String>) -> Result<Vec<CodeChunk>, String> {
     info!("🔍 Vector search: {} (top_k: {})", query, top_k);
     
     // Create embedding for query
-    let query_embedding = create_embedding_bge(query).await?;
+    let query_embedding = create_embedding_bge(query, endpoint).await?;
     
     // Get VectorDB instance
     let global_db: tokio::sync::MutexGuard<Option<VectorDB>> = VECTOR_DB.lock().await;
@@ -1028,17 +1031,14 @@ pub async fn vector_search(query: String, top_k: u32) -> Result<Vec<CodeChunk>, 
 
 /// Index a file in the vector database
 #[tauri::command]
-pub async fn index_file_vector(file_path: String) -> Result<(), String> {
+pub async fn index_file_vector(file_path: String, endpoint: Option<String>) -> Result<(), String> {
     info!("📇 Dosya indeksleniyor: {}", file_path);
     
     // Read file content
     let content = read_file(file_path.clone())?;
     
-    // TODO: Parse file with tree-sitter to extract symbols
-    // For now, create a single chunk for the entire file
-    
     // Create embedding
-    let embedding = create_embedding_bge(content.clone()).await?;
+    let embedding = create_embedding_bge(content.clone(), endpoint).await?;
     
     // Create chunk
     let chunk = CodeChunk {
@@ -1065,6 +1065,48 @@ pub async fn index_file_vector(file_path: String) -> Result<(), String> {
         .map_err(|e| format!("Vector DB upsert hatası: {}", e))?;
     
     info!("✅ Dosya indekslendi: {}", file_path);
+    Ok(())
+}
+
+/// Index manual content (like git commits) in the vector database
+#[tauri::command]
+pub async fn index_manual_vector(
+    id: String,
+    file_path: String,
+    content: String,
+    chunk_type: String,
+    symbol_name: Option<String>,
+    endpoint: Option<String>
+) -> Result<(), String> {
+    info!("📇 Manuel veri indeksleniyor: {} ({})", id, chunk_type);
+    
+    // Create embedding
+    let embedding = create_embedding_bge(content.clone(), endpoint).await?;
+    
+    // Create chunk
+    let chunk = CodeChunk {
+        id,
+        file_path,
+        content,
+        embedding,
+        symbol_name,
+        chunk_type,
+        timestamp: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs(),
+    };
+    
+    // Get VectorDB instance
+    let global_db = VECTOR_DB.lock().await;
+    let db = global_db.as_ref()
+        .ok_or("Vector DB başlatılmamış.")?;
+    
+    // Upsert
+    db.upsert(vec![chunk])
+        .await
+        .map_err(|e| format!("Vector DB upsert hatası: {}", e))?;
+    
     Ok(())
 }
 
@@ -1219,6 +1261,33 @@ pub async fn git_log_file(path: String, limit: Option<u32>) -> Result<String, St
     
     let log_output = String::from_utf8_lossy(&output.stdout).to_string();
     info!("✅ Git log retrieved: {} bytes", log_output.len());
+    
+    Ok(log_output)
+}
+
+/// 🆕 TASK 10.3: Get git log for the entire project
+#[tauri::command]
+pub async fn git_log_project(limit: Option<u32>) -> Result<String, String> {
+    info!("📜 Git log for project");
+    
+    let limit_arg = limit.unwrap_or(50).to_string();
+    
+    let output = Command::new("git")
+        .args(&["log", &format!("-{}", limit_arg)])
+        .output()
+        .map_err(|e| format!("Failed to execute git log: {}", e))?;
+    
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        if stderr.contains("not a git repository") {
+            info!("⚠️ Not a git repository, returning empty log");
+            return Ok(String::new());
+        }
+        return Err(format!("Git log failed: {}", stderr));
+    }
+    
+    let log_output = String::from_utf8_lossy(&output.stdout).to_string();
+    info!("✅ Project git log retrieved: {} bytes", log_output.len());
     
     Ok(log_output)
 }
