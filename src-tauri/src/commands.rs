@@ -531,17 +531,17 @@ pub async fn create_embedding_bge(text: String, endpoint: Option<String>) -> Res
         .send()
         .await
         .map_err(|e| {
-            error!("❌ BGE Embedding hatası: {}", e);
-            format!("BGE Embedding hatası: {}", e)
+            log::warn!("⚠️ BGE Embedding bağlantısı başarısız (Yerel model kapalı olabilir): {}", e);
+            format!("BGE Embedding bağlantısı kapalı: {}", e)
         })?;
 
     let response_text = res.text().await.map_err(|e| {
-        error!("❌ BGE Response okuma hatası: {}", e);
+        log::warn!("⚠️ BGE Response okuma hatası: {}", e);
         e.to_string()
     })?;
 
     let json: serde_json::Value = serde_json::from_str(&response_text).map_err(|e| {
-        error!("❌ BGE JSON parse hatası: {}", e);
+        log::warn!("⚠️ BGE JSON parse hatası: {}", e);
         e.to_string()
     })?;
 

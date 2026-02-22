@@ -413,6 +413,7 @@ export function useChatMessages({
 
             // 4. Placeholder for Assistant Response
             const msgId = generateMessageId("assistant");
+            setMessages((prev) => [...prev, { id: msgId, role: "assistant", content: "", timestamp: Date.now() }]);
 
             try {
                 let accumulatedResponse = "";
